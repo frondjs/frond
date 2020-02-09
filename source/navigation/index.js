@@ -40,7 +40,6 @@ Navigation.prototype.constructor = Navigation
 Navigation.prototype.browserStore = new LocalStoragePro()
 
 Navigation.prototype.build = function build(views, components, additionalProps, opts) {
-  console.log('building views ('+this.id+')')
   const self = this
 
   if (!self.kit.isArray(views) && self.kit.isEmpty(views)) return;
