@@ -274,7 +274,7 @@ FrondComponent.prototype.removeAllEventListeners = function removeAllEventListen
 }
 
 FrondComponent.prototype.removeDOMElement = function removeDOMElement() {
-  if (this.dom) {
+  if (this.dom && this.dom.parentNode) {
     this.dom.parentNode.removeChild(this.dom)
   }
 }

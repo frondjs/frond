@@ -1,6 +1,6 @@
 {
   "name": "@frondjs/frond",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A JSON based, toolless, Javascript framework for building user interfaces.",
   "main": "dist/minified/index.js",
   "scripts": {
