@@ -238,7 +238,7 @@ Navigation.prototype.shift = function shift(target, locale) {
 
   // after
   const afterView = self.getActiveView()
-  self.browserStore.setItem(self.storeKeyPrefix + 'ACTIVE_PATH', afterView)
+  self.browserStore.setItem(self.storeKeyPrefix + 'ACTIVE_PATH', afterView.fullpath)
 
   self.emit('afterShift', [afterView, self.getPrevView()])
   if (self.kit.isEmpty(beforeView)) {
