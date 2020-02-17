@@ -97,7 +97,7 @@ Navigation.prototype.build = function build(views, components, additionalProps, 
     while (true) {
       if (self.kit.isEmpty(parentViewID)) break;
 
-      const parentViewMatches = memory.filter(m => m.id == parentViewID)
+      const parentViewMatches = memory.filter(m => m.id == parentViewID && m.locale == defaultLocale)
       if (self.kit.isEmpty(parentViewMatches)) break;
 
       const parentView = parentViewMatches[0]
