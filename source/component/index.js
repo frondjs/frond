@@ -5,6 +5,8 @@ const domEvents = require('../domEvents')
 function FrondComponent(initialState, initialEvents) {
   StateManagerObject.call(this, initialState, initialEvents)
 
+  this.kit = null
+
   /*
   * The id property is something unique across all components in the frond instance
   * It may be specified by user or frond itself.
@@ -39,7 +41,7 @@ function FrondComponent(initialState, initialEvents) {
   this.needsMount = true
   this.destroyed = false
   this.analytics = true
-  this.viewer = null
+  this.router = null
 
   /*
   *
@@ -58,7 +60,7 @@ FrondComponent.prototype = Object.create(StateManagerObject.prototype)
 FrondComponent.prototype.constructor = FrondComponent
 
 FrondComponent.prototype.render = function render() {
-  if (this.utility.isNull(this.dom)) {
+  if (this.kit.isNull(this.dom)) {
     // initial render. dom element and event listeners will never be updated again.
     this.createDOMElement()
     this.registerDOMEventListeners()
@@ -97,11 +99,11 @@ FrondComponent.prototype.registerDOMEventListeners = function registerDOMEventLi
         if (eventName == 'click') {
           // prevent url bar changes on hashtag clicks
           // we also prevent auto url bar changes on clicks which is handled by viewer, not here.
-          const href = self.utility.getProp(self.resolvedHTMLAttrs, 'href', '')
+          const href = self.kit.getProp(self.resolvedHTMLAttrs, 'href', '')
           if (href.slice(0, 1) == '#') e.preventDefault()
         }
         // fire all functions specified by user for eventName.
-        if (self.utility.isArray(self._events[eventName])) {
+        if (self.kit.isArray(self._events[eventName])) {
           return self._events[eventName].map(function(fn) {
             return fn.apply(self, [e])
           })
@@ -117,9 +119,9 @@ FrondComponent.prototype.registerDOMEventListeners = function registerDOMEventLi
 }
 
 FrondComponent.prototype.updateHTMLAttrs = function updateHTMLAttrs() {
-  const htmlAttrs = this.utility.getProp(this.input, 'attrs', {})
+  const htmlAttrs = this.kit.getProp(this.input, 'attrs', {})
   const newAttrs = this.resolveHTMLAttrs(htmlAttrs)
-  if (!this.utility.isEqual(this.resolvedHTMLAttrs, newAttrs)) {
+  if (!this.kit.isEqual(this.resolvedHTMLAttrs, newAttrs)) {
     this.resolvedHTMLAttrs = newAttrs
     this.patchHTMLAttrs()
   }
@@ -127,7 +129,7 @@ FrondComponent.prototype.updateHTMLAttrs = function updateHTMLAttrs() {
 
 FrondComponent.prototype.resolveHTMLAttrs = function resolveHTMLAttrs(attrs) {
   const self = this
-  const keys = self.utility.isObject(attrs)
+  const keys = self.kit.isObject(attrs)
     ? Object.keys(attrs)
     : []
   if (!keys || keys.length === 0) return {};
@@ -135,8 +137,8 @@ FrondComponent.prototype.resolveHTMLAttrs = function resolveHTMLAttrs(attrs) {
   return keys.reduce(function(memo, key) {
     const parsed = self.resolveHTMLAttrVal(attrs[key], key)
     if (
-      self.utility.isString(parsed)
-      || (key == 'style' && self.utility.isObject(parsed))
+      self.kit.isString(parsed)
+      || (key == 'style' && self.kit.isObject(parsed))
     ) {
       memo[key] = parsed
     }
@@ -145,7 +147,7 @@ FrondComponent.prototype.resolveHTMLAttrs = function resolveHTMLAttrs(attrs) {
 }
 
 FrondComponent.prototype.resolveHTMLAttrVal = function resolveHTMLAttrVal(v, key) {
-  const type = this.utility.getType(v)
+  const type = this.kit.getType(v)
 
   if (type == 'string') return v
   else if (type == 'number') return v.toString()
@@ -160,14 +162,14 @@ FrondComponent.prototype.resolveHTMLAttrVal = function resolveHTMLAttrVal(v, key
 
 FrondComponent.prototype.patchHTMLAttrs = function patchHTMLAttrs() {
   const self = this
-  const keys = self.utility.isObject(self.resolvedHTMLAttrs)
+  const keys = self.kit.isObject(self.resolvedHTMLAttrs)
     ? Object.keys(self.resolvedHTMLAttrs)
     : []
   if (!keys || keys.length === 0) return;
 
   keys.map(function(key) {
     const parsed = self.resolvedHTMLAttrs[key]
-    if (key == 'style' && self.utility.isObject(parsed)) {
+    if (key == 'style' && self.kit.isObject(parsed)) {
       const jsStyleProps = Object.keys(parsed)
       jsStyleProps.map(function(prop) {
         if (self.dom.style[prop] != parsed[prop]) {
@@ -198,7 +200,7 @@ FrondComponent.prototype.updateChildren = function updateChildren() {
 
   const resolved = this.resolveChildren()
 
-  if (!this.utility.isEqual(resolved, this.getChildren())) {
+  if (!this.kit.isEqual(resolved, this.getChildren())) {
     this.children = resolved
   }
 }
@@ -206,19 +208,19 @@ FrondComponent.prototype.updateChildren = function updateChildren() {
 FrondComponent.prototype.resolveChildren = function resolveChildren() {
   if (this._render == '__NOT_SPECIFIED__') {
     // initial render
-    this._render = this.utility.getProp(this.input, 'render', null)
+    this._render = this.kit.getProp(this.input, 'render', null)
   }
 
-  if (this.utility.isFunction(this._render)) {
+  if (this.kit.isFunction(this._render)) {
     this.renderFn = this._render
     this.renderFnResult = this.renderFn.apply(this, [])
 
-    if (this.utility.isArray(this.renderFnResult)) return Array.from(this.renderFnResult)
-    else if (this.utility.isNull(this.renderFnResult)) return null
+    if (this.kit.isArray(this.renderFnResult)) return Array.from(this.renderFnResult)
+    else if (this.kit.isNull(this.renderFnResult)) return null
     else return [this.renderFnResult]
   }
-  else if (this.utility.isArray(this._render)) return Array.from(this._render)
-  else if (this.utility.isNull(this._render)) return null
+  else if (this.kit.isArray(this._render)) return Array.from(this._render)
+  else if (this.kit.isNull(this._render)) return null
   else return [this._render]
 }
 
@@ -230,7 +232,7 @@ FrondComponent.prototype.haveChildrenChanged = function haveChildrenChanged() {
   this.dontRunChildrenResolverAgain = true
 
   const resolved = this.resolveChildren()
-  if (!this.utility.isEqual(resolved, this.getChildren())) {
+  if (!this.kit.isEqual(resolved, this.getChildren())) {
     this.children = resolved
     return true;
   }
@@ -250,11 +252,11 @@ FrondComponent.prototype.shouldMount = function shouldMount() {
 FrondComponent.prototype.getClassNames = function getClassNames() {
   if (this.dom && this.domNodeType != 'plaintext') {
     const dc = this.dom.getAttribute('class')
-    if (this.utility.isEmpty(dc)) return ''
+    if (this.kit.isEmpty(dc)) return ''
     return dc
   }
   else {
-    return this.utility.getProp(this.resolvedHTMLAttrs, 'class', '')
+    return this.kit.getProp(this.resolvedHTMLAttrs, 'class', '')
   }
 }
 
@@ -312,7 +314,7 @@ FrondComponent.prototype.destroy = function destroy() {
 }
 
 FrondComponent.prototype.isStatic = function isStatic() {
-  return this.utility.isEqual(this.getState(), {_tick: false})
+  return this.kit.isEqual(this.getState(), {_tick: false})
 }
 
 FrondComponent.prototype.getTextContent = function getTextContent() {
@@ -326,23 +328,21 @@ FrondComponent.prototype.getTextContent = function getTextContent() {
 }
 
 FrondComponent.prototype.haveState = function haveState() {
-  return !this.utility.isEqual({_tick: false}, this.getState())
+  return !this.kit.isEqual({_tick: false}, this.getState())
 }
 
-FrondComponent.prototype.createViewer = function createViewer(
-  initialEvents, viewerConfig
+FrondComponent.prototype.createRouter = function createRouter(
+  initialEvents, routerConfig
 ) {
-  const {views, components, additionalViewProps} = viewerConfig
-  viewerConfig.config.id = viewerConfig.id
+  this.router = new Navigation(initialEvents, routerConfig)
+  this.router.kit = this.kit
+  this.router.build(routerConfig.components)
 
-  this.viewer = new Navigation(initialEvents, viewerConfig.config)
-  this.viewer.build(views, components, additionalViewProps)
-
-  return this.viewer
+  return this.router
 }
 
-FrondComponent.prototype.getViewer = function getViewer() {
-  return this.viewer
+FrondComponent.prototype.getRouter = function getRouter() {
+  return this.router
 }
 
 FrondComponent.prototype.rerender = function rerender() {
@@ -350,19 +350,19 @@ FrondComponent.prototype.rerender = function rerender() {
 }
 
 FrondComponent.prototype.isFetching = function isFetching() {
-  return this.utility.isNull(this.getState()._data)
+  return this.kit.isNull(this.getState()._data)
 }
 
 FrondComponent.prototype.hasFetchError = function hasFetchError(nodeName) {
   const d = this.getState()._data
 
-  if (!this.utility.isEmpty(nodeName)) {
-    if (this.utility.getProp(d, [nodeName, 'error'])) {
+  if (!this.kit.isEmpty(nodeName)) {
+    if (this.kit.getProp(d, [nodeName, 'error'])) {
       return true
     }
   }
   else {
-    if (this.utility.getProp(d, 'error')) {
+    if (this.kit.getProp(d, 'error')) {
       return true
     }
   }

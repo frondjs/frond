@@ -1,10 +1,12 @@
-const StateManagerObject = require('state-manager-object/source')
+const StateManagerObject = require('state-manager-object')
+const kit = require('@basekits/core')
+
 const FrondComponent = require('./component')
 const Network = require('./network')
 const frondTags = require('./frondTags')
 const svgTags = require('./svgTags')
 const htmlTags = require('./htmlTags')
-const viewerRenderFn = require('./navigation/renderFn')
+const routeRenderer = require('./navigation/renderer')
 const ff = require('./core/ff')
 
 const errMsgs = {
@@ -22,24 +24,35 @@ const infoMsgs = {
 function FrondJS() {
   StateManagerObject.call(this, {}, {})
 
-  this.componentIDCounter = null
-  this.memory = []
-  this.debug = false
-  this.initTime = null
-  this.settings = null
-  this.history = []
-  this.throttleScrollListener = null
-  this.viewers = []
-  this.networks = []
+  this.kit = kit
+  this.kit.addKit(require('@basekits/kit-type'))
+  this.kit.addKit(require('@basekits/kit-object'))
+  this.kit.addKit(require('@basekits/kit-string'))
+  this.kit.addKit(require('@basekits/kit-hashing'))
+  this.kit.addKit(require('@basekits/kit-error'))
+  this.kit.addKit(require('@basekits/kit-dom'))
+  this.kit.addKit(require('@basekits/kit-function'))
+  this.kit.addKit(require('@basekits/kit-validator'))
+  this.kit.addKit(require('@basekits/kit-array'))
 }
 
 FrondJS.prototype = Object.create(StateManagerObject.prototype)
 FrondJS.prototype.constructor = FrondJS
 
+FrondJS.prototype.componentIDCounter = null
+FrondJS.prototype.memory = []
+FrondJS.prototype.debug = false
+FrondJS.prototype.initTime = null
+FrondJS.prototype.settings = null
+FrondJS.prototype.history = []
+FrondJS.prototype.throttleScrollListener = null
+FrondJS.prototype.routers = []
+FrondJS.prototype.networks = []
+
 FrondJS.prototype.createUI = function createUI(obj, settings = null) {
   this.initTime = Date.now()
   this.settings = {
-    listenVisibilityChanges: this.utility.getProp(
+    listenVisibilityChanges: this.kit.getProp(
       settings, 'listenVisibilityChanges', true
     )
   }
@@ -60,14 +73,14 @@ FrondJS.prototype.createMemory = function createMemory(obj) {
   const memory = []
 
   function append(input, parent, index) {
-    const wantedID = self.utility.getProp(input, 'id')
+    const wantedID = self.kit.getProp(input, 'id')
     const component = self.createComponent(input, parent, index, wantedID)
-    if (self.utility.isUndefined(component)) return;
+    if (self.kit.isUndefined(component)) return;
 
     memory.push(component)
 
     const children = self.getComponentChildren(component)
-    if (self.utility.isArray(children) && children.length > 0) {
+    if (self.kit.isArray(children) && children.length > 0) {
       for (let k = 0; k < children.length; k++) {
         append(children[k], component, k)
       }
@@ -85,7 +98,7 @@ FrondJS.prototype.createComponent = function createComponent(
   const self = this
 
   const resolvedInput = self.resolveComponentInput(input, parent)
-  if (self.utility.isUndefined(resolvedInput)) {
+  if (self.kit.isUndefined(resolvedInput)) {
     self.log('warning', errMsgs.invalidInput, input)
     return undefined;
   }
@@ -100,7 +113,7 @@ FrondJS.prototype.createComponent = function createComponent(
   }
 
   const initialState = Object.assign({},
-    self.utility.getProp(resolvedInput, 'state', {}),
+    self.kit.getProp(resolvedInput, 'state', {}),
     {_tick: false}
   )
 
@@ -109,30 +122,31 @@ FrondJS.prototype.createComponent = function createComponent(
   )
 
   // roughly set the href attribute if target specified
-  const target = self.utility.getProp(resolvedInput, 'target')
-  if (!self.utility.isEmpty(target)) {
-    if (self.utility.isEmpty(resolvedInput.attrs)) resolvedInput.attrs = {}
-    const internalLink = self.getViewer().getLink(target)
+  const target = self.kit.getProp(resolvedInput, 'target')
+  if (!self.kit.isEmpty(target)) {
+    if (self.kit.isEmpty(resolvedInput.attrs)) resolvedInput.attrs = {}
+    const internalLink = self.getRouter().getLink(target)
     resolvedInput.attrs.href = internalLink || target
   }
 
   // create a new component
   const component = new FrondComponent(initialState, initialEvents)
+  component.kit = kit
   component.index = index
-  component.parent = self.utility.getProp(parent, 'id', null)
-  component.id = self.utility.isEmpty(id)
+  component.parent = self.kit.getProp(parent, 'id', null)
+  component.id = self.kit.isEmpty(id)
     ? self.getNextComponentID()
     : id
-  component.idAutoAssigned = self.utility.isEmpty(id)
+  component.idAutoAssigned = self.kit.isEmpty(id)
   component.roots = [component.id].concat(
-    self.utility.getProp(parent, 'roots', [])
+    self.kit.getProp(parent, 'roots', [])
   )
   component.input = resolvedInput
   component.type = componentType
   component.domNodeTag = domNodeTag
   component.domNodeType = domNodeType
 
-  const analytics = self.utility.getProp(component.input, 'analytics')
+  const analytics = self.kit.getProp(component.input, 'analytics')
   component.analytics = analytics === true
 
   component.emit('init')
@@ -141,39 +155,39 @@ FrondJS.prototype.createComponent = function createComponent(
 
   component.emit('create')
 
-  const viewerConfig = self.utility.getProp(component.input, 'viewer', null)
-  if (self.utility.isObject(viewerConfig) && !self.utility.isEmpty(viewerConfig)) {
-    self.registerComponentViewer(component, viewerConfig)
+  // check router
+  if (self.kit.isObject( self.kit.getProp(component.input, 'router') )) {
+    self.registerComponentRouter(component, component.input.router)
   }
 
   return component
 }
 
 FrondJS.prototype.getComponentChildren = function getComponentChildren(component) {
-  const render = this.utility.getProp(component.input, 'render', null)
+  const render = this.kit.getProp(component.input, 'render', null)
 
-  if (this.utility.isFunction(render)) {
+  if (this.kit.isFunction(render)) {
     // executing user render function
     const renderResult = render.apply(component, [])
 
-    if (this.utility.isArray(renderResult)) return Array.from(renderResult)
-    else if (this.utility.isNull(renderResult)) return null
+    if (this.kit.isArray(renderResult)) return Array.from(renderResult)
+    else if (this.kit.isNull(renderResult)) return null
     else return [renderResult]
   }
-  else if (this.utility.isArray(render)) return Array.from(render)
-  else if (this.utility.isNull(render)) return null
+  else if (this.kit.isArray(render)) return Array.from(render)
+  else if (this.kit.isNull(render)) return null
   else return [render]
 }
 
 FrondJS.prototype.render = function render(ref = null) {
   const self = this
 
-  if (self.utility.isNull(ref)) {
+  if (self.kit.isNull(ref)) {
     // initial render
 
     if (self.settings.listenVisibilityChanges) {
       // track element visibility by listening scroll event
-      self.throttleScrollListener = self.utility.throttle(function(event) {
+      self.throttleScrollListener = self.kit.throttle(function(event) {
         self.memory.map(function(c) {
           if (c.analytics) {
             const rect = c.dom.getBoundingClientRect()
@@ -194,7 +208,7 @@ FrondJS.prototype.render = function render(ref = null) {
     const root = self.memory[0]
 
     const staticElement = document.getElementById(root.id)
-    if (!self.utility.isDOMElement(staticElement)) {
+    if (!self.kit.isDOMElement(staticElement)) {
       self.log('warning', errMsgs.containerElemNotFound, root.id)
       return;
     }
@@ -223,7 +237,7 @@ FrondJS.prototype.mountChildren = function mountChildren(parent) {
   const children = this.memory.filter(
     c => c.parent == parent.id && c.shouldMount()
   )
-  if (!this.utility.isArray(children)) return undefined;
+  if (!this.kit.isArray(children)) return undefined;
 
   const length = children.length
   if (children.length === 0) return undefined;
@@ -253,15 +267,15 @@ FrondJS.prototype.updateMemoryBlock = function updateMemoryBlock(component) {
       newComp = input
     }
     else {
-      const wantedID = self.utility.getProp(input, 'id')
+      const wantedID = self.kit.getProp(input, 'id')
       newComp = self.createComponent(input, parent, index, wantedID)
     }
-    if (self.utility.isEmpty(newComp)) return;
+    if (self.kit.isEmpty(newComp)) return;
 
     memory.push(newComp)
 
     const children = self.getComponentChildren(newComp)
-    if (self.utility.isArray(children) && children.length > 0) {
+    if (self.kit.isArray(children) && children.length > 0) {
       for (let k = 0; k < children.length; k++) {
         append(children[k], newComp, k)
       }
@@ -279,7 +293,6 @@ FrondJS.prototype.mergeMemoryBlock = function mergeMemoryBlock(memory) {
   */
 
   const self = this
-  const util = self.utility
 
   const beRemoved = []
   const beInserted = []
@@ -289,8 +302,8 @@ FrondJS.prototype.mergeMemoryBlock = function mergeMemoryBlock(memory) {
     const ochildren = this.memory.filter(comp => comp.parent == c.id)
     const children = memory.filter(comp => comp.parent == c.id)
 
-    const oclen = util.isArray(ochildren) ? ochildren.length : 0
-    const clen = util.isArray(children) ? children.length : 0
+    const oclen = self.kit.isArray(ochildren) ? ochildren.length : 0
+    const clen = self.kit.isArray(children) ? children.length : 0
 
     if (oclen > clen) {
       // remove redundant active children
@@ -301,14 +314,14 @@ FrondJS.prototype.mergeMemoryBlock = function mergeMemoryBlock(memory) {
       }
     }
 
-    if (this.utility.isArray(children) && children.length > 0) {
+    if (this.kit.isArray(children) && children.length > 0) {
       for (let i = 0; i < children.length; i++) {
         const isItemExistInOldMemory = oclen > i
         if (isItemExistInOldMemory) {
           // equality check
-          const oid = this.utility.getProp(ochildren[i].input, 'id')
-          const id = this.utility.getProp(children[i].input, 'id')
-          if (this.utility.isString(id) && oid == id) {
+          const oid = this.kit.getProp(ochildren[i].input, 'id')
+          const id = this.kit.getProp(children[i].input, 'id')
+          if (this.kit.isString(id) && oid == id) {
             this.log('debug', 'Treated as same:', ochildren[i], children[i])
             beRemounted.push(id)
             //children[i].index = ochildren[i].index
@@ -334,7 +347,7 @@ FrondJS.prototype.mergeMemoryBlock = function mergeMemoryBlock(memory) {
 
   // cleanup
   const beRemovedFamily = this.memory
-    .filter(c => !util.isEmpty(
+    .filter(c => !self.kit.isEmpty(
       beRemoved.filter(rid => c.roots.indexOf(rid) !== -1)
     ))
     .map(c => c.id)
@@ -353,14 +366,14 @@ FrondJS.prototype.mergeMemoryBlock = function mergeMemoryBlock(memory) {
   }
 }
 
-FrondJS.prototype.registerComponentViewer = function registerComponentViewer(
-  component, viewerConfig
+FrondJS.prototype.registerComponentRouter = function registerComponentRouter(
+  component, routerConfig
 ) {
   const self = this
 
-  viewerConfig.id = component.id
+  routerConfig.id = component.id
 
-  const viewerInitialEvents = {
+  const initialEvents = {
     initialShift: function() {
       const v = this
       if (v.useAddressBar()) {
@@ -375,34 +388,34 @@ FrondJS.prototype.registerComponentViewer = function registerComponentViewer(
     afterShift: [
       function() {
         self.log('info', 'View changed to ' + this.getActiveView().id)
-        self.get(viewerConfig.id).rerender()
+        self.get(routerConfig.id).rerender()
         window.scrollTo({top:0, behavior: 'smooth'})
       }
     ]
   }
 
-  if (self.utility.isFunction(self.utility.getProp(viewerConfig, ['on', 'initialShift']))) {
-    viewerInitialEvents.initialShift.push(viewerConfig.on.initialShift)
+  if (self.kit.isFunction(self.kit.getProp(routerConfig, ['on', 'initialShift']))) {
+    initialEvents.initialShift.push(routerConfig.on.initialShift)
   }
 
-  if (self.utility.isFunction(self.utility.getProp(viewerConfig, ['on', 'afterShift']))) {
-    viewerInitialEvents.afterShift.push(viewerConfig.on.afterShift)
+  if (self.kit.isFunction(self.kit.getProp(routerConfig, ['on', 'afterShift']))) {
+    initialEvents.afterShift.push(routerConfig.on.afterShift)
   }
 
-  component.createViewer(viewerInitialEvents, viewerConfig)
+  component.createRouter(initialEvents, routerConfig)
 
-  self.viewers.push(component.id)
+  self.routers.push(component.id)
 }
 
 FrondJS.prototype.createComponentInitialEventsFromInput = function createComponentInitialEventsFromInput(input, initialState) {
   const self = this
 
-  const events = self.utility.getProp(input, 'on', {})
+  const events = self.kit.getProp(input, 'on', {})
 
   // re-render on state update only if component have state
-  if (!self.utility.isEqual({_tick: false}, initialState)) {
+  if (!self.kit.isEqual({_tick: false}, initialState)) {
     if (!events.hasOwnProperty('afterUpdate')) events.afterUpdate = []
-    if (!self.utility.isArray(events.afterUpdate)) {
+    if (!self.kit.isArray(events.afterUpdate)) {
       events.afterUpdate = [events.afterUpdate]
     }
     events.afterUpdate.unshift(function() {
@@ -415,47 +428,45 @@ FrondJS.prototype.createComponentInitialEventsFromInput = function createCompone
   }
 
   // navigate application without reloading the page on link click
-  const target = self.utility.getProp(input, 'target')
-  const href = self.utility.getProp(input, ['attrs', 'href'])
-  if (!self.utility.isEmpty(target)) {
-    const internalLink = self.getViewer().getLink(target)
+  const target = self.kit.getProp(input, 'target')
+  const href = self.kit.getProp(input, ['attrs', 'href'])
+  if (!self.kit.isEmpty(target)) {
+    const internalLink = self.getRouter().getLink(target)
     // register click handler for links
     if (!events.hasOwnProperty('click')) events.click = []
-    if (!self.utility.isArray(events.click)) events.click = [events.click]
+    if (!self.kit.isArray(events.click)) events.click = [events.click]
     events.click.unshift(function(event) {
       // TODO event handler for external link clicks for better tracking
       if (internalLink) {
         event.preventDefault()
-        self.getViewer().shift(target)
+        self.getRouter().shift(target)
       }
     })
   }
 
-  // initiate viewer (router) if component have viewer config
-  const viewerConfig = self.utility.getProp(input, 'viewer', null)
-  if (self.utility.isObject(viewerConfig) && !self.utility.isEmpty(viewerConfig)) {
+  // initiate router if component have router config
+  if (self.kit.isObject( self.kit.getProp(input, 'router') )) {
     if (!events.hasOwnProperty('mount')) events.mount = []
-    if (!self.utility.isArray(events.mount)) {
-      events.mount = [events.mount]
-    }
+    if (!self.kit.isArray(events.mount)) events.mount = [events.mount]
+
     events.mount.unshift(function() {
       // here, this refers to the component and self refers to the frond
       const c = this
-      const initialView = c.getViewer().matchPath()
+      const initialView = c.getRouter().matchPath()
       // give viewer time to render its empty children
       setTimeout(function() {
         // show initial view
-        c.getViewer().shift(initialView.id)
+        c.getRouter().shift(initialView.id)
       }, 1)
     })
   }
 
   // make network request only if component have a valid network request property
-  const network = self.utility.getProp(input, 'network', null)
-  if (!self.utility.isEmpty(network)) {
+  const network = self.kit.getProp(input, 'network', null)
+  if (!self.kit.isEmpty(network)) {
     let networkName = null
     let networkPayload = null
-    if (self.utility.isArray(network)) {
+    if (self.kit.isArray(network)) {
       if (network.length === 1) {
         networkPayload = network[0]
       }
@@ -468,7 +479,7 @@ FrondJS.prototype.createComponentInitialEventsFromInput = function createCompone
       networkPayload = network
     }
     if (!events.hasOwnProperty('mount')) events.mount = []
-    if (!self.utility.isArray(events.mount)) {
+    if (!self.kit.isArray(events.mount)) {
       events.mount = [events.mount]
     }
     events.mount.unshift(function() {
@@ -484,7 +495,7 @@ FrondJS.prototype.createComponentInitialEventsFromInput = function createCompone
 }
 
 FrondJS.prototype.resolveComponentInput = function resolveComponentInput(input, parent) {
-  const langType = this.utility.getType(input)
+  const langType = this.kit.getType(input)
   const whitelist = ['string', 'number', 'object', 'date', 'regexp', 'error']
   if (whitelist.indexOf(langType) === -1) {
     return undefined
@@ -492,22 +503,21 @@ FrondJS.prototype.resolveComponentInput = function resolveComponentInput(input, 
 
   switch (langType) {
     case 'object':
-      const viewerConfig = this.utility.getProp(input, 'viewer', null)
-      if (this.utility.isObject(viewerConfig) && !this.utility.isEmpty(viewerConfig)) {
-        if (this.utility.isEmpty(input.id)) {
-          throw new Error('Viewer component must take an id.')
+      if (this.kit.isObject( this.kit.getProp(input, 'router') )) {
+        if (this.kit.isEmpty(input.id)) {
+          throw new Error('A router component must have an id.')
         }
 
         input.state = Object.assign(
-          {}, this.utility.getProp(input, 'state', {}), {_viewer: true}
+          {}, this.kit.getProp(input, 'state', {}), {_router: true}
         )
-        input.render = viewerRenderFn
+        input.render = routeRenderer
       }
 
-      const network = this.utility.getProp(input, 'network', null)
-      if (!this.utility.isEmpty(network)) {
+      const network = this.kit.getProp(input, 'network', null)
+      if (!this.kit.isEmpty(network)) {
         input.state = Object.assign(
-          {}, this.utility.getProp(input, 'state', {}), {_data: null}
+          {}, this.kit.getProp(input, 'state', {}), {_data: null}
         )
       }
 
@@ -528,7 +538,7 @@ FrondJS.prototype.resolveComponentInput = function resolveComponentInput(input, 
       break;
 
     case 'error':
-      return this.utility.stringifyError(input)
+      return this.kit.stringifyError(input)
       break;
 
     default:
@@ -537,7 +547,7 @@ FrondJS.prototype.resolveComponentInput = function resolveComponentInput(input, 
 }
 
 FrondJS.prototype.findComponentType = function findComponentType(input) {
-  const langType = this.utility.getType(input)
+  const langType = this.kit.getType(input)
 
   switch (langType) {
     case 'string':
@@ -546,10 +556,10 @@ FrondJS.prototype.findComponentType = function findComponentType(input) {
       break;
 
     case 'object':
-      const userType = this.utility.getProp(input, 'type')
+      const userType = this.kit.getProp(input, 'type')
       if (userType) return userType
 
-      const target = this.utility.getProp(input, 'target')
+      const target = this.kit.getProp(input, 'target')
       if (target) return 'link'
 
       return 'component'
@@ -561,7 +571,7 @@ FrondJS.prototype.findComponentType = function findComponentType(input) {
 }
 
 FrondJS.prototype.findComponentDOMNodeTag = function findComponentDOMNodeTag(type) {
-  if (!this.utility.isString(type)) return undefined
+  if (!this.kit.isString(type)) return undefined
   if (frondTags.hasOwnProperty(type)) return frondTags[type]
   return type
 }
@@ -574,7 +584,7 @@ FrondJS.prototype.findComponentDOMNodeType = function findComponentDOMNodeType(c
 }
 
 FrondJS.prototype.getNextComponentID = function getNextComponentID() {
-  if (!this.utility.isNumber(this.componentIDCounter)) this.componentIDCounter = 0
+  if (!this.kit.isNumber(this.componentIDCounter)) this.componentIDCounter = 0
 
   this.componentIDCounter += 1
 
@@ -585,7 +595,7 @@ FrondJS.prototype.remountChildren = function remountChildren(parent) {
   const children = this.memory.filter(
     c => c.parent == parent.id && (c.shouldMount() || c.shouldRemount())
   )
-  if (!this.utility.isArray(children)) return undefined;
+  if (!this.kit.isArray(children)) return undefined;
 
   const length = children.length
   if (children.length === 0) return undefined;
@@ -624,17 +634,17 @@ FrondJS.prototype.isSame = function isSame(o, n) {
 
   const oClassNames = o.getClassNames()
   const nClassNames = n.getClassNames()
-  const sameClassNames = this.utility.isEqual(oClassNames, nClassNames)
+  const sameClassNames = this.kit.isEqual(oClassNames, nClassNames)
 
   const oText = o.getTextContent()
   const nText = n.getTextContent()
-  const sameTextContent = this.utility.isEqual(oText, nText)
+  const sameTextContent = this.kit.isEqual(oText, nText)
 
   const sameNodeTag = o.domNodeTag == n.domNodeTag
 
   if (bothStatic && sameTextContent && sameNodeTag && sameClassNames) return true;
 
-  const sameState = this.utility.isEqual(o.getState(), n.getState())
+  const sameState = this.kit.isEqual(o.getState(), n.getState())
 
   if (bothDynamic && sameID && sameState) return true;
 
@@ -642,7 +652,7 @@ FrondJS.prototype.isSame = function isSame(o, n) {
 }
 
 FrondJS.prototype.replaceComponents = function replaceComponents(map) {
-  if (!this.utility.isObject(map)) return;
+  if (!this.kit.isObject(map)) return;
 
   const oldIds = Object.keys(map)
   if (oldIds.length === 0) return;
@@ -678,7 +688,7 @@ FrondJS.prototype.replaceComponents = function replaceComponents(map) {
 }
 
 FrondJS.prototype.destroyComponents = function destroyComponents(list) {
-  if (!this.utility.isArray(list)) return;
+  if (!this.kit.isArray(list)) return;
   if (list.length === 0) return;
 
   const sorted = this.memory
@@ -711,7 +721,7 @@ FrondJS.prototype.removeComponents = function removeComponents(list) {
   * Removes list of components from the memory and the dom
   */
 
-  if (!this.utility.isArray(list)) return;
+  if (!this.kit.isArray(list)) return;
   if (list.length === 0) return;
 
   const sorted = this.memory
@@ -754,7 +764,7 @@ FrondJS.prototype.appendComponents = function appendComponents(list = null) {
   * Simple appends list of components into the memory.
   */
 
-  if (!this.utility.isArray(list)) return;
+  if (!this.kit.isArray(list)) return;
   if (list.length === 0) return;
 
   for (let i = 0; i < list.length; i++) {
@@ -763,7 +773,7 @@ FrondJS.prototype.appendComponents = function appendComponents(list = null) {
 }
 
 FrondJS.prototype.get = function get(id) {
-  if (this.utility.isEmpty(id) || !this.utility.isString(id)) return undefined;
+  if (this.kit.isEmpty(id) || !this.kit.isString(id)) return undefined;
 
   const len = this.memory.length
   for (let i = 0; i < len; i++) {
@@ -773,13 +783,18 @@ FrondJS.prototype.get = function get(id) {
   return undefined;
 }
 
-FrondJS.prototype.getViewer = function getViewer(cid) {
-  const _cid = this.utility.isEmpty(cid) ? this.viewers[0] : cid
+// deprecated, use getViewer
+FrondJS.prototype.getViewer = function(cid = null) {
+  return this.getRouter(cid)
+}
+
+FrondJS.prototype.getRouter = function getRouter(cid = null) {
+  const _cid = this.kit.isEmpty(cid) ? this.routers[0] : cid
 
   const component = this.get(_cid)
   if (!component) return false
 
-  return component.getViewer()
+  return component.getRouter()
 }
 
 FrondJS.prototype.createNetwork = function createNetwork(settings) {
@@ -795,7 +810,7 @@ FrondJS.prototype.createNetwork = function createNetwork(settings) {
 }
 
 FrondJS.prototype.getNetwork = function getNetwork(nid) {
-  if (this.utility.isEmpty(nid)) {
+  if (this.kit.isEmpty(nid)) {
     return this.networks[0]
   }
   else {
@@ -823,15 +838,15 @@ FrondJS.prototype.log = function log(type, msg, args = [], ...rest) {
 
   const prefix = ['[FrondJS]', '[' + type.toUpperCase() + ']', ': '].join('')
 
-  if (this.utility.isString(msg) && this.utility.isArray(args)) {
-    msg = this.utility.sprintf(msg, args)
+  if (this.kit.isString(msg) && this.kit.isArray(args)) {
+    msg = this.kit.sprintf(msg, args)
     cargs.push(prefix + msg)
   }
   else {
-    if (this.utility.isString(msg)) cargs.push(prefix + msg)
+    if (this.kit.isString(msg)) cargs.push(prefix + msg)
     else cargs.push(prefix, msg)
-    if (!this.utility.isEmpty(args)) cargs.push(args)
-    if (!this.utility.isEmpty(rest)) cargs.push.apply(cargs, rest)
+    if (!this.kit.isEmpty(args)) cargs.push(args)
+    if (!this.kit.isEmpty(rest)) cargs.push.apply(cargs, rest)
   }
 
   console.log.apply(console, cargs)

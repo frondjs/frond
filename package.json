@@ -1,6 +1,6 @@
 {
   "name": "@frondjs/frond",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "A JSON based, toolless, Javascript framework for building user interfaces.",
   "main": "dist/minified/index.js",
   "scripts": {
@@ -31,8 +31,15 @@
   "homepage": "https://github.com/frondjs/frond#readme",
   "dependencies": {
     "@basekits/core": "^1.0.0",
+    "@basekits/kit-array": "^1.0.0",
+    "@basekits/kit-dom": "^1.0.1",
+    "@basekits/kit-error": "^1.0.3",
+    "@basekits/kit-function": "^1.1.0",
+    "@basekits/kit-hashing": "^1.0.0",
     "@basekits/kit-object": "^1.0.1",
+    "@basekits/kit-string": "^1.0.0",
     "@basekits/kit-type": "^1.0.0",
+    "@basekits/kit-validator": "^1.0.0",
     "event-emitter-object": "^1.0.7",
     "local-storage-pro": "^1.0.0",
     "state-manager-object": "^0.2.5"

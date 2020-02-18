@@ -1,18 +1,17 @@
 const EventEmitter = require('event-emitter-object')
-const kit = require('@basekits/core')
-const kitType = require('@basekits/kit-type')
-const kitObject = require('@basekits/kit-object')
 const LocalStoragePro = require('local-storage-pro')
 
 function Navigation(initialEvents, config) {
   EventEmitter.call(this, initialEvents)
 
-  // can be updated by user
+  this.kit = null
   this.id = config.id
-  this.views = null
+  this.views = config.views || []
   this.defaultViewID = config.defaultView || 'start'
   this.defaultLocale = config.defaultLocale || null
+  this.activeLocale = config.activeLocale || this.defaultLocale || null
   this.basePath = config.basePath || '/'
+  this.additionalViewProps = config.additionalViewProps || []
   this.viewsAreStaticByDefault = config.hasOwnProperty('viewsAreStaticByDefault')
     ? config.viewsAreStaticByDefault
     : true
@@ -27,11 +26,7 @@ function Navigation(initialEvents, config) {
   this.isLocalFilesystem = window.location.protocol == 'file:'
   this.foundLocales = []
   this.history = []
-  this.storeKeyPrefix = 'VIEWER_' + config.id.toUpperCase() + '_'
-
-  this.kit = kit
-  this.kit.addKit(kitType)
-  this.kit.addKit(kitObject)
+  this.storeKeyPrefix = 'FROND_ROUTER_' + config.id.toUpperCase() + '_'
 }
 
 Navigation.prototype = Object.create(EventEmitter.prototype)
@@ -39,20 +34,21 @@ Navigation.prototype.constructor = Navigation
 
 Navigation.prototype.browserStore = new LocalStoragePro()
 
-Navigation.prototype.build = function build(views, components, additionalProps, opts) {
+Navigation.prototype.build = function build(components) {
   const self = this
 
-  if (!self.kit.isArray(views) && self.kit.isEmpty(views)) return;
+  if (!self.kit.isArray(self.views) || self.kit.isEmpty(self.views)) return;
   if (!self.kit.isObject(components)) return;
 
-  const addiProps = self.kit.isArray(additionalProps) ? additionalProps : []
-  const defaultLocale = self.kit.getProp(opts, 'locale', self.defaultLocale)
+  const addiProps = self.kit.isNotEmpty(self.additionalViewProps) && self.kit.isArray(self.additionalViewProps) 
+    ? self.additionalViewProps 
+    : []
 
   // validate and format view objects
   const memory = []
-  const vLength = views.length
+  const vLength = self.views.length
   for (let i = 0; i < vLength; i++) {
-    const viewObj = views[i]
+    const viewObj = self.views[i]
     const viewID = self.kit.getProp(viewObj, 'id')
     const componentName = self.kit.getProp(viewObj, 'component', viewID)
     const component = self.kit.getProp(components, componentName)
@@ -66,7 +62,7 @@ Navigation.prototype.build = function build(views, components, additionalProps, 
         parent: self.kit.getProp(viewObj, 'parent', null),
         authRequired: self.kit.getProp(viewObj, 'authRequired', false),
         metadata: self.kit.getProp(viewObj, 'metadata', {}),
-        locale: self.kit.getProp(viewObj, 'locale', defaultLocale)
+        locale: self.kit.getProp(viewObj, 'locale', self.defaultLocale)
       }
 
       if (addiProps.length > 0) {
@@ -97,7 +93,7 @@ Navigation.prototype.build = function build(views, components, additionalProps, 
     while (true) {
       if (self.kit.isEmpty(parentViewID)) break;
 
-      const parentViewMatches = memory.filter(m => m.id == parentViewID && m.locale == defaultLocale)
+      const parentViewMatches = memory.filter(m => m.id == parentViewID && m.locale == v.locale)
       if (self.kit.isEmpty(parentViewMatches)) break;
 
       const parentView = parentViewMatches[0]
@@ -132,12 +128,12 @@ Navigation.prototype.build = function build(views, components, additionalProps, 
 Navigation.prototype.matchPath = function matchPath(inputPath) {
   const self = this
 
-  const defaultView = self.getViewByID(self.defaultViewID)
+  const defaultView = self.getViewByID(self.defaultViewID, self.activeLocale)
 
   // check restores
   const resViewID = self.browserStore.getItem(self.storeKeyPrefix + 'RESTORE_VIEW_ID')
   if (!self.kit.isEmpty(resViewID)) {
-    const restoreView = self.getViewByID(resViewID)
+    const restoreView = self.getViewByID(resViewID, self.activeLocale)
     self.browserStore.removeItem(self.storeKeyPrefix + 'RESTORE_VIEW_ID')
     if (restoreView) {
       return restoreView
@@ -190,14 +186,17 @@ Navigation.prototype.matchPath = function matchPath(inputPath) {
   return defaultView
 }
 
-Navigation.prototype.getViewByID = function getViewByID(id, locale) {
+Navigation.prototype.getViewByID = function getViewByID(id, locale = null) {
   const self = this
 
   const matches = self.views.filter(function(v) {
-    if (!self.kit.isEmpty(locale)) {
+    if (self.kit.isNotEmpty(locale) && self.foundLocales.indexOf(locale) !== -1) {
       return v.id == id && v.locale == locale
     }
-    else if (!self.kit.isEmpty(self.defaultLocale)) {
+    else if (self.kit.isNotEmpty(self.activeLocale)) {
+      return v.id == id && v.locale == self.activeLocale
+    }
+    else if (self.kit.isNotEmpty(self.defaultLocale)) {
       return v.id == id && v.locale == self.defaultLocale
     }
     else {
@@ -205,23 +204,23 @@ Navigation.prototype.getViewByID = function getViewByID(id, locale) {
     }
   })
 
-  if (!self.kit.isEmpty(matches)) {
+  if (self.kit.isNotEmpty(matches)) {
     return matches[0]
   }
 
   return undefined;
 }
 
-Navigation.prototype.shift = function shift(target, locale) {
+Navigation.prototype.shift = function shift(target, locale = null) {
   const self = this
 
   if (!self.kit.isString(target)) return undefined;
 
   // before
   const beforeView = self.getActiveView()
-  const wantedLocale = !self.kit.isEmpty(locale)
+  const wantedLocale = !self.kit.isEmpty(locale) && self.foundLocales.indexOf(locale) !== -1
     ? locale
-    : self.kit.getProp(beforeView, 'locale', self.defaultLocale)
+    : self.activeLocale
   const targetView = self.getViewByID(target, wantedLocale)
   if (self.kit.isEmpty(targetView)) return undefined;
 
