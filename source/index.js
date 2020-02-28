@@ -207,10 +207,12 @@ FrondJS.prototype.render = function render(ref = null) {
 
     const root = self.memory[0]
 
-    const staticElement = !self.kit.isDOMElement(staticElement)
-      ? document.createElement('div')
-      : document.getElementById(root.id)
-    staticElement.setAttribute('id', root.id)
+    let staticElement = document.getElementById(root.id)
+    if (!self.kit.isDOMElement(staticElement)) {
+      staticElement = document.createElement('div')
+      staticElement.setAttribute('id', root.id)
+      document.body.insertBefore(staticElement, null)
+    }
 
     self.mountChildren(root)
 
