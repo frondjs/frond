@@ -4,7 +4,7 @@ const LocalStoragePro = require('local-storage-pro')
 function Navigation(initialEvents, config) {
   EventEmitter.call(this, initialEvents)
 
-  this.kit = null
+  // configurable properties
   this.id = config.id
   this.views = config.views || []
   this.defaultViewID = config.defaultView || 'start'
@@ -22,17 +22,30 @@ function Navigation(initialEvents, config) {
     ? config.manipulateAddressBar
     : false
 
-  // will be updated by library
+  // internal properties
   this.isLocalFilesystem = window.location.protocol == 'file:'
   this.foundLocales = []
   this.history = []
   this.storeKeyPrefix = 'FROND_ROUTER_' + config.id.toUpperCase() + '_'
+
+  // save initial location request
+  this.initialLocation = {
+    host: window.location.host,
+    origin: window.location.origin,
+    pathname: window.location.pathname,
+    port: window.location.port,
+    protocol: window.location.protocol,
+    hash: window.location.hash && window.location.hash.length > 0
+      ? window.location.hash.slice(1)
+      : ''
+  }
 }
 
 Navigation.prototype = Object.create(EventEmitter.prototype)
 Navigation.prototype.constructor = Navigation
 
 Navigation.prototype.browserStore = new LocalStoragePro()
+Navigation.prototype.kit = null
 
 Navigation.prototype.build = function build(components) {
   const self = this
@@ -40,8 +53,8 @@ Navigation.prototype.build = function build(components) {
   if (!self.kit.isArray(self.views) || self.kit.isEmpty(self.views)) return;
   if (!self.kit.isObject(components)) return;
 
-  const addiProps = self.kit.isNotEmpty(self.additionalViewProps) && self.kit.isArray(self.additionalViewProps) 
-    ? self.additionalViewProps 
+  const addiProps = self.kit.isNotEmpty(self.additionalViewProps) && self.kit.isArray(self.additionalViewProps)
+    ? self.additionalViewProps
     : []
 
   // validate and format view objects
@@ -338,6 +351,10 @@ Navigation.prototype.breadcrumb = function breadcrumb(view, url) {
         title: v.metadata.title
       }
     })
+}
+
+Navigation.prototype.getInitialLocation = function getInitialLocation() {
+  return this.initialLocation
 }
 
 module.exports = Navigation
