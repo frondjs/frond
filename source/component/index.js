@@ -136,9 +136,9 @@ FrondComponent.prototype.resolveHTMLAttrs = function resolveHTMLAttrs(attrs) {
 
   return keys.reduce(function(memo, key) {
     const parsed = self.resolveHTMLAttrVal(attrs[key], key)
-    if (
-      self.kit.isString(parsed)
-      || (key == 'style' && self.kit.isObject(parsed))
+    if (self.kit.isString(parsed) ||
+      (key == 'style' && self.kit.isObject(parsed)) ||
+      self.kit.isBoolean(parsed)
     ) {
       memo[key] = parsed
     }
@@ -179,12 +179,12 @@ FrondComponent.prototype.patchHTMLAttrs = function patchHTMLAttrs() {
     }
     else {
       if (self.dom.hasAttribute(key)) {
-        if (self.dom.getAttribute(key) != parsed) {
-          self.dom.setAttribute(key, parsed)
-        }
+        if (parsed === false) self.dom.removeAttribute(key)
+        else if (self.dom.getAttribute(key) != parsed) self.dom.setAttribute(key, parsed)
+        else {}
       }
       else {
-        self.dom.setAttribute(key, parsed)
+        if (parsed !== false) self.dom.setAttribute(key, parsed)
       }
     }
   })
