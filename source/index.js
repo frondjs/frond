@@ -34,26 +34,26 @@ function FrondJS() {
   this.kit.addKit(require('@basekits/kit-function'))
   this.kit.addKit(require('@basekits/kit-validator'))
   this.kit.addKit(require('@basekits/kit-array'))
+
+  this.componentIDCounter = null
+  this.memory = []
+  this.debug = false
+  this.initTime = null
+  this.settings = null
+  this.history = []
+  this.throttleScrollListener = null
+  this.routers = []
+  this.networks = []
 }
 
 FrondJS.prototype = Object.create(StateManagerObject.prototype)
 FrondJS.prototype.constructor = FrondJS
 
-FrondJS.prototype.componentIDCounter = null
-FrondJS.prototype.memory = []
-FrondJS.prototype.debug = false
-FrondJS.prototype.initTime = null
-FrondJS.prototype.settings = null
-FrondJS.prototype.history = []
-FrondJS.prototype.throttleScrollListener = null
-FrondJS.prototype.routers = []
-FrondJS.prototype.networks = []
-
 FrondJS.prototype.createUI = function createUI(obj, settings = null) {
   this.initTime = Date.now()
   this.settings = {
     listenVisibilityChanges: this.kit.getProp(
-      settings, 'listenVisibilityChanges', true
+      settings, 'listenVisibilityChanges', false
     )
   }
 

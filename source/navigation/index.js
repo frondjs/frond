@@ -73,7 +73,7 @@ Navigation.prototype.build = function build(components) {
         static: self.kit.getProp(viewObj, 'static', self.viewsAreStaticByDefault),
         pathName: self.kit.getProp(viewObj, 'pathName', ''),
         parent: self.kit.getProp(viewObj, 'parent', null),
-        authRequired: self.kit.getProp(viewObj, 'authRequired', false),
+        access: self.kit.getProp(viewObj, 'access', 'public'),
         metadata: self.kit.getProp(viewObj, 'metadata', {}),
         locale: self.kit.getProp(viewObj, 'locale', self.defaultLocale)
       }
@@ -197,6 +197,37 @@ Navigation.prototype.matchPath = function matchPath(inputPath) {
   }
 
   return defaultView
+}
+
+Navigation.prototype.hasMatch = function hasMatch(inputPath = '/') {
+  const self = this
+
+  const _pathnames = inputPath.split('/')
+  const pathnames = _pathnames.filter(p => p.length > 0).join('/')
+  const pathname = self.basePath + pathnames
+
+  const matches = []
+  const viewsLength = self.views.length
+  for (let i = 0; i < viewsLength; i++) {
+    const v = self.views[i]
+
+    if (pathname == v.fullpath) {
+      return v.id
+    }
+
+    if (
+      !self.kit.isEmpty(self.defaultLocale)
+      && self.defaultLocale == v.locale
+      && self.ignoreLocalePathForDefaultLocale
+    ) {
+      const pathnameAlias = self.basePath + self.defaultLocale + '/' + pathnames
+      if (pathnameAlias == v.fullpath) {
+        return v.id
+      }
+    }
+  }
+
+  return false
 }
 
 Navigation.prototype.getViewByID = function getViewByID(id, locale = null) {
