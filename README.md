@@ -1,2 +1,2 @@
 # frond
-A JSON based, toolless, Javascript framework for building user interfaces.
+Scalable, toolless and powerful javascript frontend framework.

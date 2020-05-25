@@ -1,15 +1,14 @@
 {
   "name": "@frondjs/frond",
-  "version": "1.0.11",
-  "description": "A JSON based, toolless, Javascript framework for building user interfaces.",
-  "main": "dist/minified/index.js",
+  "version": "2.0.0",
+  "description": "Scalable, toolless and powerful javascript frontend framework.",
+  "main": "dist/frond.cjs.js",
   "scripts": {
-    "test": "for i in tests/*.js; do node \"$i\"; done",
-    "build": "npm run build-minified && npm run build-umd && npm run build-umd-polyfilled",
-    "build-minified": "mkdir -p dist/minified && BABEL_ENV=development ./node_modules/.bin/minify ./source -d ./dist/minified && ls -lR ./dist",
-    "build-umd": "mkdir -p dist/umd && BABEL_ENV=development ./node_modules/.bin/browserify -s FrondJS ./source/index.js -o ./dist/umd/index.js && ./node_modules/.bin/minify ./dist/umd/index.js --out-file ./dist/umd/index.js",
-    "build-umd-polyfilled": "mkdir -p dist/umd-polyfilled && mkdir -p ./source-compiled && BABEL_ENV=production ./node_modules/.bin/babel ./source -d ./source-compiled && ./node_modules/.bin/browserify -s FrondJS ./source-compiled/index.js -o ./dist/umd-polyfilled/index.js && ./node_modules/.bin/minify ./dist/umd-polyfilled/index.js --out-file ./dist/umd-polyfilled/index.js && rm -rf ./source-compiled",
-    "release": "bash dev/push.sh",
+    "test": "NODE_ENV=test jasmine --config=spec/config/jasmine.json",
+    "build": "USE_POLYFILLS=off rollup --config rollup.config.js && USE_POLYFILLS=on rollup --config rollup.config.js",
+    "gen-babel-report": "node dev/generateBabelPolyfillReport.js",
+    "gen-dist-report": "node dev/generateDistributionReport.js",
+    "commit": "node dev/commit.js commit",
     "pub": "npm publish --access public"
   },
   "repository": {
@@ -30,27 +29,28 @@
   },
   "homepage": "https://github.com/frondjs/frond#readme",
   "dependencies": {
-    "@basekits/core": "^1.0.0",
-    "@basekits/kit-array": "^1.0.0",
-    "@basekits/kit-dom": "^1.3.0",
-    "@basekits/kit-error": "^1.0.3",
-    "@basekits/kit-function": "^1.2.0",
-    "@basekits/kit-hashing": "^1.0.0",
-    "@basekits/kit-object": "^1.0.1",
-    "@basekits/kit-string": "^1.0.0",
-    "@basekits/kit-type": "^1.0.0",
-    "@basekits/kit-validator": "^1.1.2",
-    "event-emitter-object": "^1.0.8",
-    "local-storage-pro": "^1.1.0",
-    "state-manager-object": "^1.0.1"
+    "basekits": "^1.1.0",
+    "event-emitter-object": "^1.1.2",
+    "local-storage-pro": "^1.1.1",
+    "showdown": "^1.9.1",
+    "speakingurl": "^14.0.1",
+    "state-manager-object": "^1.1.1"
   },
   "devDependencies": {
-    "@babel/cli": "^7.8.3",
-    "@babel/core": "^7.8.7",
-    "@babel/preset-env": "^7.8.7",
-    "babel-minify": "^0.5.1",
-    "babel-preset-minify": "^0.5.1",
-    "browserify": "^16.5.0",
-    "core-js": "^3.6.4"
+    "@babel/cli": "^7.8.4",
+    "@babel/core": "^7.9.0",
+    "@babel/preset-env": "^7.9.5",
+    "@rollup/plugin-commonjs": "^11.1.0",
+    "@rollup/plugin-json": "^4.0.3",
+    "@rollup/plugin-node-resolve": "^7.1.3",
+    "core-js": "^3.6.5",
+    "jasmine": "^3.5.0",
+    "jsdom": "^16.2.2",
+    "parse5": "^6.0.0",
+    "rollup": "^2.6.1",
+    "rollup-plugin-babel": "^4.4.0",
+    "rollup-plugin-terser": "^5.3.0",
+    "semver": "^7.3.2",
+    "yargs": "^15.3.1"
   }
 }

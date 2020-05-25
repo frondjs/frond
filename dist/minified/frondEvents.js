@@ -1,1 +1,0 @@
-module.exports={init:!0,create:!0,mount:!0,remount:!0,beforeDestroy:!0,destroy:!0,visible:!0,partiallyVisible:!0,hidden:!0};

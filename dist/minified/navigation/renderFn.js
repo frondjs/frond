@@ -1,1 +1,0 @@
-module.exports=function(){if(!this.getViewer())return[""];const a=this.getViewer().getActiveView();if(!a)return[""];const b=a.component;return"function"==typeof b?b():b};
