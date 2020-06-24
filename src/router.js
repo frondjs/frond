@@ -7,16 +7,18 @@ import Frond from './frond'
 function Router(config) {
   EventEmitterObject.call(this, {})
 
-  if (validationkit.isEmpty(config.defaultLocale) && validationkit.isNotEmpty(Frond.config('locale')))
-    config.defaultLocale = Frond.config('locale')
-
   this.config = config
+  this.config.defaultLocale = Frond.formatLocale(this.config.defaultLocale)
+  this.config.appLocale = Frond.formatLocale(this.config.appLocale)
+  this.config.availableLocales = this.config.availableLocales.map(lo => Frond.formatLocale(lo))
+
   this.activeRouteIndex = undefined
   this.routes = []
   this.supportHistoryAPI = validationkit.isNotEmpty(Frond.getWindow().history)
   this.isLocalFilesystem = Frond.getWindow().location.protocol == 'file:'
   this.initialShiftDone = false
   this.stats = []
+  this.registerEvents(this.config.on)
   this.readInitialLocation()
   this.build()
 
@@ -25,6 +27,29 @@ function Router(config) {
 
 Router.prototype = Object.create(EventEmitterObject.prototype)
 Router.prototype.constructor = Router
+
+Router.prototype.registerEvents = function registerEvents(obj = {}) {
+  this.on('initialShift', function() {
+    // handle browser's back and forward buttons
+    Frond.getWindow().addEventListener('popstate', function() {
+      Frond.getRouter().shift( Frond.getRouter().match(Frond.getWindow().location.pathname).id )
+    })
+  })
+
+  this.on('afterShift', function() {
+    // wait for view to render and scroll to top
+    setTimeout(function() {
+      Frond.getWindow().scrollTo({top:0, behavior: 'smooth'})
+    }, 300)
+  })
+
+  if (!validationkit.isObject(obj)) return;
+
+  Object
+    .keys(obj)
+    .filter(name => typekit.isFunction(obj[name]))
+    .map(name => this.on(name, obj[name]))
+}
 
 Router.prototype.readInitialLocation = function readInitialLocation() {
   this.initialLocationURL = new URL(Frond.getWindow().location.href)
@@ -41,19 +66,15 @@ Router.prototype.build = function build() {
 }
 
 Router.prototype.insertRoute = function insertRoute(obj) {
-  const requiredProps = ['id', 'component', 'path', 'locale']
-
   // if it doesn't have a parent, then it is the root
   if (validationkit.isEmpty(obj.parent)) obj.parent = null
+  // it also may not have a path
+  if (validationkit.isEmpty(obj.path)) obj.path = ''
 
   // can't allow it to continue without required props
+  const requiredProps = ['id', 'component']
   if (validationkit.isNotEmpty(requiredProps.filter(p => !obj.hasOwnProperty(p))))
     throw new Error('The following fields are required for a route object: ' + requiredProps.join(', '))
-
-  // check component's existence
-  /*
-  if (Frond.hasComponent(obj.component) !== true)
-    throw new Error('The component you specified couldn\'t found. (' + obj.component + ')')*/
 
   // metadata object for title, description etc.
   if (!obj.hasOwnProperty('metadata')) obj.metadata = {}
@@ -62,25 +83,24 @@ Router.prototype.insertRoute = function insertRoute(obj) {
   // public by default
   obj.access = objectkit.getProp(obj, 'access', 'public')
 
-  // set slug lib options since all paths will be slugified
-  obj.locale = this.formatLocale(obj.locale)
-  const slugOpts = {maintainCase: true, lang: obj.locale.slice(0, 2)}
+  // check locale and set slug lib options since all paths will be slugified
+  const slugOpts = {maintainCase: true, lang: this.config.appLocale.slice(0, 2), custom: {'_': '-'}}
 
   // all parent ids in order
   const roots = [obj.id]
   // all parent paths in order
-  const paths = [getSlug(obj.path, slugOpts)]
+  const paths = [getSlug(Frond.translate(this.config.appLocale, 'routes', obj.path), slugOpts)]
 
   // find parent roots and paths
   let parentID = obj.parent
   while (true) {
     if (validationkit.isEmpty(parentID)) break;
-    const parentRoutes = this.config.routes.filter(r => r.id == parentID && r.locale == obj.locale)
+    const parentRoutes = this.config.routes.filter(r => r.id == parentID)
     if (validationkit.isEmpty(parentRoutes)) break;
 
     const parentRoute = parentRoutes[0]
     roots.push(parentRoute.id)
-    paths.push(getSlug(parentRoute.path, slugOpts))
+    paths.push(getSlug(Frond.translate(this.config.appLocale, 'routes', parentRoute.path), slugOpts))
 
     parentID = parentRoute.parent
   }
@@ -88,8 +108,8 @@ Router.prototype.insertRoute = function insertRoute(obj) {
   // include locale path as base path
   if (objectkit.getProp(this.config, 'useLocalePaths') === true) {
     const omit = objectkit.getProp(this.config, 'omitDefaultLocalePath') === true &&
-      this.config.defaultLocale == obj.locale
-    if (omit === false) paths.push(getSlug(obj.locale, {maintainCase: false}))
+      this.config.defaultLocale == this.config.appLocale
+    if (omit === false) paths.push(this.slugifyLocale(this.config.appLocale))
   }
 
   // roots and fullpath useful for breadcrumbs and links
@@ -97,24 +117,45 @@ Router.prototype.insertRoute = function insertRoute(obj) {
   obj.fullpath = this.config.basePath + paths.filter(p => validationkit.isNotEmpty(p)).reverse().join('/')
 
   // we have a valid, formatted route object.
-  // any additional props the develer add hasn't removed
+  // any additional props the developer add hasn't removed
   this.routes.push(obj)
-/*
-  if (this.activeRouteIndex === undefined) {
-    const initialLocale = objectkit.getProp(this.config, 'initialLocale', this.config.defaultLocale)
-    if (initialLocale == obj.locale) {
-      if (this.config.)
-    }
+
+  // check localization mode
+  const w = Frond.getWindow()
+  if (w.__FROND_LOCALIZE__) {
+    if (!w.__FROND_TRANSLATION_KEYS__.hasOwnProperty('routes'))
+      w.__FROND_TRANSLATION_KEYS__.routes = []
+    if (validationkit.isNotEmpty(obj.path))
+      w.__FROND_TRANSLATION_KEYS__.routes.push({
+        input: obj.path,
+        note: 'This should be a path name. As a part of the URL. (No spaces or non-alphanumeric characters, except dash.) Do not change this unless you know what you are doing. Choose carefully and wisely if you are translating this for the first time.'
+      })
+    if (validationkit.isNotEmpty(obj.metadata.title))
+      w.__FROND_TRANSLATION_KEYS__.routes.push({
+        input: obj.metadata.title,
+        note: 'Title of the page: "' + obj.fullpath + '". This will appear on the site, search engines and social media sites.'
+      })
+    if (validationkit.isNotEmpty(obj.metadata.description))
+      w.__FROND_TRANSLATION_KEYS__.routes.push({
+        input: obj.metadata.description,
+        note: 'Short description of the page: "' + obj.fullpath + '". (Not more than 255 characters in general.) This will appear on the site, search engines and social media sites.'
+      })
+    if (validationkit.isNotEmpty(objectkit.getProp(obj.metadata, ['richcontent', 'html'])))
+      w.__FROND_TRANSLATION_KEYS__.routes.push({
+        input: obj.metadata.richcontent.html,
+        note: 'HTML Content of the page: "' + obj.fullpath + '". Translator must have a basic knowledge about HTML markup.'
+      })
   }
-*/
+
   return this
 }
 
-Router.prototype.formatLocale = function formatLocale(str) {
-  if (str.length === 2) return str
-  const f = str.replace(/(_)/g, '-')
-  if (f.indexOf('-') === -1) return f
-  return f.split('-')[0] + '_' + f.split('-')[1].toUpperCase()
+Router.prototype.getRoutes = function getRoutes() {
+  return this.routes
+}
+
+Router.prototype.slugifyLocale = function slugifyLocale(locale) {
+  return getSlug(locale, {maintainCase: false, custom: {'_': '-'}})
 }
 
 Router.prototype.match = function match(input = undefined) {
@@ -142,7 +183,7 @@ Router.prototype.match = function match(input = undefined) {
     if (route.fullpath == path) return route
     // locale may be omitted
     if (omitDefaultLocalePath === true &&
-      this.config.defaultLocale == route.locale &&
+      this.config.defaultLocale == this.config.appLocale &&
       aliasPath == route.fullpath
     ) {
       return route
@@ -155,16 +196,13 @@ Router.prototype.match = function match(input = undefined) {
 Router.prototype.get = function get(id, locale = undefined) {
   // returns matched route or undefined against a route id and locale
   if (validationkit.isEmpty(id)) return undefined
-  if (validationkit.isEmpty(locale)) {
-    const activeRoute = this.getActiveRoute()
-    locale = activeRoute ? activeRoute.locale : this.config.defaultLocale
-  }
+  if (validationkit.isEmpty(locale)) locale = this.config.appLocale
 
   // match
   const len = this.routes.length
   for (let i = 0; i < len; i++) {
     const route = this.routes[i]
-    if (route.id == id && route.locale == locale) {
+    if (route.id == id) {
       return route
     }
   }
@@ -178,22 +216,21 @@ Router.prototype.getActiveRoute = function getActiveRoute() {
 
 Router.prototype.shift = function shift(id, locale = undefined) {
   if (validationkit.isEmpty(id)) return undefined
+  if (validationkit.isEmpty(locale)) locale = this.config.appLocale
 
   const activeRoute = this.getActiveRoute()
-  if (validationkit.isEmpty(locale)) locale = activeRoute ? activeRoute.locale : this.config.defaultLocale
-
   const nextRoute = this.get(id, locale)
 
   this.emit('beforeShift', [activeRoute, nextRoute])
 
   // shift
-  this.activeRouteIndex = this.findRouteIndex(nextRoute.id, nextRoute.locale)
+  this.activeRouteIndex = this.findRouteIndex(nextRoute.id)
 
   if (this.config.useAddressBar === true && this.supportHistoryAPI && !this.isLocalFilesystem) {
     Frond.getWindow().history.pushState(null, null, nextRoute.fullpath)
   }
 
-  Frond.getComponent(this.config.componentID).update({route: id})
+  Frond.getComponent(this.config.componentID).update({route: {id: id, component: nextRoute.component}})
 
   this.emit('afterShift', [nextRoute, activeRoute])
 
@@ -205,11 +242,11 @@ Router.prototype.shift = function shift(id, locale = undefined) {
   this.addStat(nextRoute)
 }
 
-Router.prototype.findRouteIndex = function findRouteIndex(id, locale) {
+Router.prototype.findRouteIndex = function findRouteIndex(id) {
   const len = this.routes.length
   for (let i = 0; i < len; i++) {
     const route = this.routes[i]
-    if (route.id == id && route.locale == locale) {
+    if (route.id) {
       return i
     }
   }
@@ -219,7 +256,7 @@ Router.prototype.addStat = function addStat(route) {
   const len = this.stats.length
   const newStat = {
     id: route.id,
-    locale: route.locale,
+    locale: this.config.appLocale,
     timestamp: Date.now(),
     duration: undefined
   }
@@ -231,32 +268,27 @@ Router.prototype.findAlternates = function findAlternates(id) {
   return this.routes.filter(r => r.id == id)
 }
 
-Router.prototype.genHierarchy = function genHierarchy(id = null, locale = undefined) {
+Router.prototype.genHierarchy = function genHierarchy(id = null) {
   const self = this
-  if (validationkit.isEmpty(locale)) {
-    const activeRoute = self.getActiveRoute()
-    locale = activeRoute ? activeRoute.locale : self.config.defaultLocale
-  }
 
   function getChildren(route) {
     route.children = self.routes
-      .filter(r => r.locale == locale && r.parent == route.id)
+      .filter(r => r.parent == route.id)
       .map(r => getChildren(r))
     return route
   }
 
   return self.routes
-    .filter(r => r.locale == locale && (validationkit.isEmpty(id) ? typekit.isNull(r.parent) : r.id == id))
+    .filter(r => validationkit.isEmpty(id) ? typekit.isNull(r.parent) : r.id == id)
     .map(r => getChildren(r))
 }
 
 Router.prototype.genBreadcrumb = function genBreadcrumb(route) {
-  return [].concat(route.roots).reverse().map(id => this.get(id, route.locale))
+  return [].concat(route.roots).reverse().map(id => this.get(id))
 }
 
-Router.prototype.rememberLastLocation = function rememberLastLocation(id = null, locale = undefined) {
-  if (validationkit.isEmpty(locale)) locale = self.getActiveRoute().locale
-  const route = validationkit.isEmpty(id) ? this.getActiveRoute() : this.get(id, locale)
+Router.prototype.rememberLastLocation = function rememberLastLocation(id = null) {
+  const route = validationkit.isEmpty(id) ? this.getActiveRoute() : this.get(id)
   localstore.setItem(this.getRestoreKeyName(), route.id)
 }
 

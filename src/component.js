@@ -11,14 +11,6 @@ function Component(config) {
   this.data = {props: {}}
   this.dataTypes = {props: {}, state: {}}
   this.stateManager = undefined
-  this.reDirectiveMatcher = /(@)((router)|(props)|(state))(\.)[a-zA-Z0-9_\-.]+/gm
-  this.reComponentDirectiveMatcher = /(@)(component)(\.)[a-zA-Z0-9_\-.]+/gm
-  this.reRouterDirectiveMatcher = /(@)(router)(\.)[a-zA-Z0-9_\-.]+/gm
-  this.reDocumentDirectiveMatcher = /(@)(document)(\.)[a-zA-Z0-9_\-.]+/
-  this.domNodeAttrNamespaceMap = {
-    'xlink:href': 'http://www.w3.org/1999/xlink',
-    'xmlns': 'http://www.w3.org/2000/xmlns/'
-  }
 
   Frond.registerComponent(this)
 
@@ -85,7 +77,10 @@ Component.prototype.readModel = function readModel(config) {
       // rebuild entire dom tree of the component
       const parent = self.rootNodes[0].parentNode
       const backupRootNodes = [].concat(self.rootNodes)
-      self.readView(self.config.view, null, {markup: 'html'})
+      self.readView(self.config.view, null, {
+        markup: 'html',
+        hasCommonComponent: Frond.hasCommonComponent(self.config.view)
+      })
       for (let i = 0; i < backupRootNodes.length; i++) {
         parent.replaceChild(self.rootNodes[i], backupRootNodes[i])
       }
@@ -115,7 +110,7 @@ Component.prototype.readModel = function readModel(config) {
 
   // navigate to the initial page
   if (objectkit.getProp(config, 'router') === true) {
-    Frond.getRouter().shift(self.stateManager.getState().route, Frond.config('locale'))
+    Frond.getRouter().shift(self.stateManager.getState().route.id, Frond.config('locale'))
   }
 }
 
@@ -151,15 +146,21 @@ Component.prototype.readView = function readView(view, domParentNode = null, vie
     const input = views[i]
 
     // accept string only if it is a component indicator
-    if (this.isComponentDirective(input)) {
+    if (Frond.isComponentDirective(input)) {
       const component = this.parseComponentDirective(input)
+      if (objectkit.getProp(viewContext, 'hasCommonComponent')) {
+        component.readView(component.config.view, null, {
+          markup: viewContext.markup,
+          hasCommonComponent: Frond.hasCommonComponent(component.config.view)
+        })
+      }
       const domNodes = component.getDOMNodes()
       for (let j = 0; j < domNodes.length; j++) {
         domParentNode.insertBefore(domNodes[j], null)
       }
     }
     else if (typekit.isString(input)) {
-      const domNode = Frond.getDocument().createTextNode(input)
+      const domNode = Frond.getDocument().createTextNode(this.translate(input, {componentID: this.config.id}))
       domParentNode.insertBefore(domNode, null)
     }
     // object inputs require more in-depth analysis
@@ -169,15 +170,21 @@ Component.prototype.readView = function readView(view, domParentNode = null, vie
       const resolved = isExpression ? this.resolveExpression(input, isExpression) : input
 
       // do the same thing as done above for string inputs
-      if (this.isComponentDirective(resolved)) {
+      if (Frond.isComponentDirective(resolved)) {
         const component = this.parseComponentDirective(resolved)
+        if (objectkit.getProp(viewContext, 'hasCommonComponent')) {
+          component.readView(component.config.view, null, {
+            markup: viewContext.markup,
+            hasCommonComponent: Frond.hasCommonComponent(component.config.view)
+          })
+        }
         const domNodes = component.getDOMNodes()
         for (let j = 0; j < domNodes.length; j++) {
           domParentNode.insertBefore(domNodes[j], null)
         }
       }
       else if (typekit.isString(resolved)) {
-        const domNode = Frond.getDocument().createTextNode(resolved)
+        const domNode = Frond.getDocument().createTextNode(this.translate(resolved, {componentID: this.config.id}))
         domParentNode.insertBefore(domNode, null)
       }
       // a real view object.
@@ -192,6 +199,11 @@ Component.prototype.readView = function readView(view, domParentNode = null, vie
         }
         else domParentNode.insertBefore(domNode, null)
 
+        // handle text if value is just text
+        if (typekit.isString(resolved[domTag])) {
+          resolved[domTag] = {children: [resolved[domTag]]}
+        }
+
         // continue reading it's children.
         if (validationkit.isNotEmpty(resolved[domTag].children)) {
           this.readView(this.parseComponentChildren(resolved[domTag].children), domNode, viewContext)
@@ -203,15 +215,21 @@ Component.prototype.readView = function readView(view, domParentNode = null, vie
         for (let j = 0; j < resolved.length; j++) {
           const resolvedItem = resolved[j]
 
-          if (this.isComponentDirective(resolvedItem)) {
+          if (Frond.isComponentDirective(resolvedItem)) {
             const component = this.parseComponentDirective(resolvedItem)
+            if (objectkit.getProp(viewContext, 'hasCommonComponent')) {
+              component.readView(component.config.view, null, {
+                markup: viewContext.markup,
+                hasCommonComponent: Frond.hasCommonComponent(component.config.view)
+              })
+            }
             const domNodes = component.getDOMNodes()
             for (let k = 0; k < domNodes.length; k++) {
               domParentNode.insertBefore(domNodes[k], null)
             }
           }
           else if (typekit.isString(resolvedItem)) {
-            const domNode = Frond.getDocument().createTextNode(resolvedItem)
+            const domNode = Frond.getDocument().createTextNode(this.translate(resolvedItem, {componentID: this.config.id}))
             domParentNode.insertBefore(domNode, null)
           }
           else if (typekit.isObject(resolvedItem)) {
@@ -237,13 +255,30 @@ Component.prototype.readView = function readView(view, domParentNode = null, vie
       else {}
     }
     else {
-      continue;
+      continue
     }
   }
 }
 
+Component.prototype.translate = function translate(input, topts) {
+  const locale = Frond.config('locale')
+
+  const w = Frond.getWindow()
+  if (w.__FROND_LOCALIZE__) {
+    w.__FROND_LOCALE__ = locale
+    if (!w.__FROND_TRANSLATION_KEYS__.hasOwnProperty(topts.componentID))
+      w.__FROND_TRANSLATION_KEYS__[topts.componentID] = []
+    const t = {input: input}
+    if (validationkit.isNotEmpty(topts.componentID)) t.componentID = topts.componentID
+    if (validationkit.isNotEmpty(topts.note)) t.note = topts.note
+    w.__FROND_TRANSLATION_KEYS__[topts.componentID].push(t)
+  }
+
+  return Frond.translate(locale, topts.componentID, input)
+}
+
 Component.prototype.isParsableDocumentExpression = function isParsableDocumentExpression(str) {
-  return this.reDocumentDirectiveMatcher.test(str)
+  return Frond.reDocumentDirectiveMatcher.test(str)
 }
 
 Component.prototype.applyDocumentContent = function applyDocumentContent(node, str, data) {
@@ -251,7 +286,7 @@ Component.prototype.applyDocumentContent = function applyDocumentContent(node, s
   const markup = arr[1]
   if (Frond.hasMarkupSupport(markup)) {
     const html = Frond.parseDocument(markup, data, this)
-    node.innerHTML = this.parseValue(html)
+    node.innerHTML = this.parseValue(this.parseValue(html))
     return;
   }
 }
@@ -264,6 +299,9 @@ Component.prototype.buildDOMNode = function buildDOMNode(tag, obj, context) {
     undefined
   if (typekit.isEmpty(node))
     throw new Error('Invalid markup (' + context.markup + ') represented.')
+
+  if (!typekit.isObject(obj)) return node
+
   const excludedAttrs = ['children']
   Object
     .keys(obj)
@@ -371,11 +409,11 @@ Component.prototype.parseDirective = function parseDirective(str) {
 Component.prototype.parseValue = function parseValue(str) {
   const self = this
   if (!typekit.isString(str))
-    throw new Error('Couldnt parse the value because of it is a ' + typekit.getType(str))
+    throw new Error('Couldnt parse the value because of it is ' + typekit.getType(str))
 
   // match directives
-  if (self.reDirectiveMatcher.test(str) !== true) return str
-  const matches = str.match(self.reDirectiveMatcher)
+  if (Frond.reDirectiveMatcher.test(str) !== true) return str
+  const matches = str.match(Frond.reDirectiveMatcher)
   if (validationkit.isEmpty(matches)) return str
 
   return matches.reduce(function(memo, directive) {
@@ -392,19 +430,14 @@ Component.prototype.parseComponentChildren = function parseComponentChildren(inp
   else return input
 }
 
-Component.prototype.isComponentDirective = function isComponentDirective(input) {
-  if (!typekit.isString(input)) return false
-  return this.reComponentDirectiveMatcher.test(input)
-}
-
 Component.prototype.parseComponentDirective = function parseComponentDirective(input) {
-  const matches = input.match(this.reComponentDirectiveMatcher)
+  const matches = input.match(Frond.reComponentDirectiveMatcher)
   if (validationkit.isEmpty(matches)) return input
   return this.parseDirective(matches[0])
 }
 
 Component.prototype.isRouteDescription = function isRouteDescription(str) {
-  return this.reRouterDirectiveMatcher.test(str)
+  return Frond.reRouterDirectiveMatcher.test(str)
 }
 
 Component.prototype.resolveRouteDescription = function resolveRouteDescription(str) {
@@ -443,7 +476,12 @@ Component.prototype.setAttribute = function setAttribute(node, attr, value, cont
       return;
     break;
     case 'text':
-      node.innerText = self.parseValue(resolved)
+      const textnode = Frond.getDocument().createTextNode(
+        self.parseValue(
+          self.translate(resolved, {componentID: this.config.id})
+        )
+      )
+      node.insertBefore(textnode, null)
       return;
     break;
     case 'href':
@@ -453,6 +491,7 @@ Component.prototype.setAttribute = function setAttribute(node, attr, value, cont
           node.addEventListener('click', function(event) {
             event.preventDefault()
             Frond.getRouter(directive.routerID).shift(directive.routeID)
+            return false
           })
         }
 
@@ -469,6 +508,10 @@ Component.prototype.setAttribute = function setAttribute(node, attr, value, cont
     return;
   }
 
+  if (attr.length > 11 && 'translator-' == attr.slice(0, 11)) {
+    return;
+  }
+
   if (context.markup == 'html')
     return node.setAttribute(attr, formatted)
 
@@ -477,7 +520,7 @@ Component.prototype.setAttribute = function setAttribute(node, attr, value, cont
 }
 
 Component.prototype.findDOMNodeAttrNamespace = function findDOMNodeAttrNamespace(attr, context) {
-  return this.domNodeAttrNamespaceMap.hasOwnProperty(attr) ? this.domNodeAttrNamespaceMap[attr] : null
+  return Frond.domNodeAttrNamespaceMap.hasOwnProperty(attr) ? Frond.domNodeAttrNamespaceMap[attr] : null
 }
 
 Component.prototype.update = function update(payload) {
@@ -489,10 +532,13 @@ Component.prototype.update = function update(payload) {
 
 Component.prototype.registerLifecycleEvents = function registerLifecycleEvents(obj) {
   if (!validationkit.isObject(obj)) return;
+
   Object
     .keys(obj)
     .filter(name => typekit.isFunction(obj[name]))
     .map(name => this.on(name, obj[name]))
+
+  this.emit('init')
 }
 
 Component.prototype.registerDOMEvents = function registerDOMEvents(obj) {
