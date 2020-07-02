@@ -16,7 +16,10 @@ function Component(config) {
 
   this.registerLifecycleEvents(config.on)
   this.readModel(config)
-  this.readView(config.view, null, {markup: 'html'})
+  this.readView(config.view, null, {
+    markup: 'html',
+    hasCommonComponent: Frond.hasCommonComponent(config.view)
+  })
   this.registerDOMEvents(config.on)
 }
 

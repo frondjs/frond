@@ -1,6 +1,6 @@
 {
   "name": "@frondjs/frond",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "Scalable, toolless and powerful javascript frontend framework.",
   "main": "dist/frond.cjs.js",
   "scripts": {
