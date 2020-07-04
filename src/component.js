@@ -157,6 +157,7 @@ Component.prototype.readView = function readView(view, domParentNode = null, vie
           hasCommonComponent: Frond.hasCommonComponent(component.config.view)
         })
       }
+      component.registerDOMEvents(component.config.on)
       const domNodes = component.getDOMNodes()
       for (let j = 0; j < domNodes.length; j++) {
         domParentNode.insertBefore(domNodes[j], null)
@@ -181,6 +182,7 @@ Component.prototype.readView = function readView(view, domParentNode = null, vie
             hasCommonComponent: Frond.hasCommonComponent(component.config.view)
           })
         }
+        component.registerDOMEvents(component.config.on)
         const domNodes = component.getDOMNodes()
         for (let j = 0; j < domNodes.length; j++) {
           domParentNode.insertBefore(domNodes[j], null)
@@ -226,6 +228,7 @@ Component.prototype.readView = function readView(view, domParentNode = null, vie
                 hasCommonComponent: Frond.hasCommonComponent(component.config.view)
               })
             }
+            component.registerDOMEvents(component.config.on)
             const domNodes = component.getDOMNodes()
             for (let k = 0; k < domNodes.length; k++) {
               domParentNode.insertBefore(domNodes[k], null)
@@ -555,8 +558,7 @@ Component.prototype.registerDOMEvents = function registerDOMEvents(obj) {
       const matches = rootDomNode.querySelectorAll(qs)
       if (validationkit.isNotEmpty(matches)) {
         for (let i = 0; i < matches.length; i++) {
-          const domNode = matches[i]
-          Object.keys(obj[qs]).map(eventName => domNode.addEventListener(eventName, obj[qs][eventName]))
+          Object.keys(obj[qs]).map(eventName => matches[i].addEventListener(eventName, obj[qs][eventName]))
         }
       }
     })
