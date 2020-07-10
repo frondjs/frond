@@ -11,16 +11,9 @@ function Component(config) {
   this.data = {props: {}}
   this.dataTypes = {props: {}, state: {}}
   this.stateManager = undefined
+  this.initialRenderDone = false
 
   Frond.registerComponent(this)
-
-  this.registerLifecycleEvents(config.on)
-  this.readModel(config)
-  this.readView(config.view, null, {
-    markup: 'html',
-    hasCommonComponent: Frond.hasCommonComponent(config.view)
-  })
-  this.registerDOMEvents(config.on)
 }
 
 Component.prototype = Object.create(EventEmitterObject.prototype)
@@ -56,6 +49,20 @@ Component.prototype.checkExpressionCondition = function checkExpressionCondition
   }
 }
 
+Component.prototype.render = function render() {
+  if (this.initialRenderDone !== true) {
+    this.registerLifecycleEvents(this.config.on)
+    this.readModel(this.config)
+    this.initialRenderDone = true
+  }
+  this.readView(this.config.view, null, {
+    markup: 'html',
+    hasCommonComponent: Frond.hasCommonComponent(this.config.view)
+  })
+  this.registerDOMEvents(this.config.on)
+  return this
+}
+
 Component.prototype.readModel = function readModel(config) {
   const self = this
   if (validationkit.isEmpty(config.model)) return;
@@ -80,14 +87,10 @@ Component.prototype.readModel = function readModel(config) {
       // rebuild entire dom tree of the component
       const parent = self.rootNodes[0].parentNode
       const backupRootNodes = [].concat(self.rootNodes)
-      self.readView(self.config.view, null, {
-        markup: 'html',
-        hasCommonComponent: Frond.hasCommonComponent(self.config.view)
-      })
+      self.render()
       for (let i = 0; i < backupRootNodes.length; i++) {
         parent.replaceChild(self.rootNodes[i], backupRootNodes[i])
       }
-      self.registerDOMEvents(self.config.on)
       self.emit('update', [curState, prevState])
     })
 
@@ -126,7 +129,7 @@ Component.prototype.getDataType = function getDataType(path) {
 }
 
 Component.prototype.readView = function readView(view, domParentNode = null, viewContext = {}) {
-  // creates dom tree recursively
+  // creates dom tree of the component, recursively
 
   // reset rootNodes in each root rendering
   // existing rootNodes won't be just disappear, they will be replaced by the new ones.
@@ -151,13 +154,6 @@ Component.prototype.readView = function readView(view, domParentNode = null, vie
     // accept string only if it is a component indicator
     if (Frond.isComponentDirective(input)) {
       const component = this.parseComponentDirective(input)
-      if (objectkit.getProp(viewContext, 'hasCommonComponent')) {
-        component.readView(component.config.view, null, {
-          markup: viewContext.markup,
-          hasCommonComponent: Frond.hasCommonComponent(component.config.view)
-        })
-      }
-      component.registerDOMEvents(component.config.on)
       const domNodes = component.getDOMNodes()
       for (let j = 0; j < domNodes.length; j++) {
         domParentNode.insertBefore(domNodes[j], null)
@@ -176,13 +172,6 @@ Component.prototype.readView = function readView(view, domParentNode = null, vie
       // do the same thing as done above for string inputs
       if (Frond.isComponentDirective(resolved)) {
         const component = this.parseComponentDirective(resolved)
-        if (objectkit.getProp(viewContext, 'hasCommonComponent')) {
-          component.readView(component.config.view, null, {
-            markup: viewContext.markup,
-            hasCommonComponent: Frond.hasCommonComponent(component.config.view)
-          })
-        }
-        component.registerDOMEvents(component.config.on)
         const domNodes = component.getDOMNodes()
         for (let j = 0; j < domNodes.length; j++) {
           domParentNode.insertBefore(domNodes[j], null)
@@ -222,13 +211,6 @@ Component.prototype.readView = function readView(view, domParentNode = null, vie
 
           if (Frond.isComponentDirective(resolvedItem)) {
             const component = this.parseComponentDirective(resolvedItem)
-            if (objectkit.getProp(viewContext, 'hasCommonComponent')) {
-              component.readView(component.config.view, null, {
-                markup: viewContext.markup,
-                hasCommonComponent: Frond.hasCommonComponent(component.config.view)
-              })
-            }
-            component.registerDOMEvents(component.config.on)
             const domNodes = component.getDOMNodes()
             for (let k = 0; k < domNodes.length; k++) {
               domParentNode.insertBefore(domNodes[k], null)
@@ -405,7 +387,7 @@ Component.prototype.parseDirective = function parseDirective(str) {
   else if (resource == 'component') {
     if (Frond.hasComponent(rest[0]) !== true)
       throw new Error('The component (' + rest[0] + ') not found inside Frond.')
-    return Frond.getComponent(rest[0])
+    return Frond.getComponent(rest[0]).render()
   }
   else {
     return str
@@ -558,7 +540,10 @@ Component.prototype.registerDOMEvents = function registerDOMEvents(obj) {
       const matches = rootDomNode.querySelectorAll(qs)
       if (validationkit.isNotEmpty(matches)) {
         for (let i = 0; i < matches.length; i++) {
-          Object.keys(obj[qs]).map(eventName => matches[i].addEventListener(eventName, obj[qs][eventName]))
+          Object.keys(obj[qs]).map(function(eventName) {
+            if (eventName == 'ready') obj[qs][eventName].call(self)
+            else matches[i].addEventListener(eventName, obj[qs][eventName])
+          })
         }
       }
     })

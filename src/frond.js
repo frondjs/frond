@@ -54,6 +54,10 @@ function Frond() {
 Frond.prototype = Object.create(EventEmitterObject.prototype)
 Frond.prototype.constructor = Frond
 
+Frond.prototype.componentLifecycleEvents = [
+  'init', 'insert', 'beforeUpdate', 'update', 'beforeFetch', 'fetch'
+]
+
 Frond.prototype.translate = function translate(locale, component, input) {
   const translation = objectkit.getProp(this.translations, [locale, component, input])
   if (!translation) {
@@ -180,7 +184,7 @@ Frond.prototype.log = function log(type, arg, ctx = undefined) {
 }
 
 Frond.prototype.render = function render(componentID, parentNode) {
-  const nodes = this.getComponent(componentID).getDOMNodes()
+  const nodes = this.getComponent(componentID).render().getDOMNodes()
   for (let i = 0; i < nodes.length; i++) {
     parentNode.insertBefore(nodes[i], null)
   }

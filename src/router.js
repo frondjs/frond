@@ -167,6 +167,7 @@ Router.prototype.match = function match(input = undefined) {
     .concat(input.split('/'))
     .filter(p => validationkit.isNotEmpty(p))
     .join('/')
+    .replace(/[\/]{2,}/g, '/')
   // locale may be omitted
   const omitDefaultLocalePath = objectkit.getProp(this.config, 'useLocalePaths') === true &&
     objectkit.getProp(this.config, 'omitDefaultLocalePath') === true
@@ -174,6 +175,7 @@ Router.prototype.match = function match(input = undefined) {
     .concat(input.split('/'))
     .filter(p => validationkit.isNotEmpty(p))
     .join('/')
+    .replace(/[\/]{2,}/g, '/')
 
   // match
   const len = this.routes.length
