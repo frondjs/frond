@@ -184,9 +184,22 @@ Frond.prototype.log = function log(type, arg, ctx = undefined) {
 }
 
 Frond.prototype.render = function render(componentID, parentNode) {
+  // renders root component
   const nodes = this.getComponent(componentID).render().getDOMNodes()
+  parentNode.innerHTML = ''
   for (let i = 0; i < nodes.length; i++) {
     parentNode.insertBefore(nodes[i], null)
+  }
+
+  // rendering done but
+  // view needs to be updated if there is a router configured to work with address bar
+  const router = this.getRouter()
+  if (validationkit.isNotEmpty(router) && router.config.useAddressBar === true) {
+    const reqpath = this.getWindow().location.pathname
+    const matchedRoute = router.match(reqpath)
+    const defaultRoute = router.get(this.getComponent('router').getState().route.id)
+    const route = validationkit.isEmpty(matchedRoute) ? defaultRoute : matchedRoute
+    router.shift(route.id)
   }
 }
 

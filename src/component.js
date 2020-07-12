@@ -113,15 +113,14 @@ Component.prototype.readModel = function readModel(config) {
       }
     })
   }
-
-  // navigate to the initial page
-  if (objectkit.getProp(config, 'router') === true) {
-    Frond.getRouter().shift(self.stateManager.getState().route.id, Frond.config('locale'))
-  }
 }
 
 Component.prototype.getData = function getData() {
   return Object.assign({}, this.data, {state: this.stateManager ? this.stateManager.getState() : {}})
+}
+
+Component.prototype.getState = function getState() {
+  return this.stateManager ? this.stateManager.getState() : undefined
 }
 
 Component.prototype.getDataType = function getDataType(path) {

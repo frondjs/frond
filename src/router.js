@@ -222,6 +222,7 @@ Router.prototype.shift = function shift(id, locale = undefined) {
 
   const activeRoute = this.getActiveRoute()
   const nextRoute = this.get(id, locale)
+  if (validationkit.isNotEmpty(activeRoute) && activeRoute.id == nextRoute.id) return undefined
 
   this.emit('beforeShift', [activeRoute, nextRoute])
 
@@ -247,8 +248,7 @@ Router.prototype.shift = function shift(id, locale = undefined) {
 Router.prototype.findRouteIndex = function findRouteIndex(id) {
   const len = this.routes.length
   for (let i = 0; i < len; i++) {
-    const route = this.routes[i]
-    if (route.id) {
+    if (this.routes[i].id == id) {
       return i
     }
   }
@@ -264,6 +264,10 @@ Router.prototype.addStat = function addStat(route) {
   }
   if (len > 0) this.stats[len - 1].duration = newStat.timestamp - this.stats[len - 1].timestamp
   this.stats.push(newStat)
+}
+
+Router.prototype.getStats = function getStats() {
+  return this.stats
 }
 
 Router.prototype.findAlternates = function findAlternates(id) {
