@@ -194,8 +194,8 @@ Frond.prototype.render = function render(componentID, parentNode) {
   // rendering done but
   // view needs to be updated if there is a router configured to work with address bar
   const router = this.getRouter()
-  if (validationkit.isNotEmpty(router) && router.config.useAddressBar === true) {
-    const reqpath = this.getWindow().location.pathname
+  if (validationkit.isNotEmpty(router)) {
+    const reqpath = router.config.useAddressBar === true ? this.getWindow().location.pathname : ''
     const matchedRoute = router.match(reqpath)
     const defaultRoute = router.get(this.getComponent('router').getState().route.id)
     const route = validationkit.isEmpty(matchedRoute) ? defaultRoute : matchedRoute

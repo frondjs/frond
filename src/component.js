@@ -119,6 +119,10 @@ Component.prototype.getData = function getData() {
   return Object.assign({}, this.data, {state: this.stateManager ? this.stateManager.getState() : {}})
 }
 
+Component.prototype.getProps = function getProps() {
+  return this.data.props
+}
+
 Component.prototype.getState = function getState() {
   return this.stateManager ? this.stateManager.getState() : undefined
 }
@@ -252,7 +256,6 @@ Component.prototype.translate = function translate(input, topts) {
 
   const w = Frond.getWindow()
   if (w.__FROND_LOCALIZE__) {
-    w.__FROND_LOCALE__ = locale
     if (!w.__FROND_TRANSLATION_KEYS__.hasOwnProperty(topts.componentID))
       w.__FROND_TRANSLATION_KEYS__[topts.componentID] = []
     const t = {input: input}
@@ -354,13 +357,23 @@ Component.prototype.resolveExpression = function resolveExpression(obj, expressi
           return obj[k]
         }
         const arr = fk.slice(5).split(' ')
-        if (arr.length < 3) throw new Error('Invalid statement: ' + k)
-        const [dataPathStr, operator, valueStr] = arr
-        if (!this.isExpressionOperator(operator)) throw new Error('Invalid expression operator: ' + operator)
-        const actualValue = this.parseDirective(dataPathStr)
-        const inputValue = functionkit.destringify(valueStr, typekit.getType(actualValue))
-        if (this.checkExpressionCondition(actualValue, inputValue, operator) === true) {
-          return obj[k]
+        if (arr.length === 1) {
+          // case $var: checks $var for non-emptiness
+          if (validationkit.isNotEmpty(this.parseDirective(arr[0]))) {
+            return obj[k]
+          }
+        }
+        else if (arr.length === 3) {
+          const [dataPathStr, operator, valueStr] = arr
+          if (!this.isExpressionOperator(operator)) throw new Error('Invalid expression operator: ' + operator)
+          const actualValue = this.parseDirective(dataPathStr)
+          const inputValue = functionkit.destringify(this.parseDirective(valueStr), typekit.getType(actualValue))
+          if (this.checkExpressionCondition(actualValue, inputValue, operator) === true) {
+            return obj[k]
+          }
+        }
+        else {
+          throw new Error('Invalid statement: ' + k)
         }
       }
 
@@ -395,8 +408,10 @@ Component.prototype.parseDirective = function parseDirective(str) {
 
 Component.prototype.parseValue = function parseValue(str) {
   const self = this
-  if (!typekit.isString(str))
+  if (!typekit.isString(str)) {
+    Frond.log('error', str)
     throw new Error('Couldnt parse the value because of it is ' + typekit.getType(str))
+  }
 
   // match directives
   if (Frond.reDirectiveMatcher.test(str) !== true) return str
@@ -540,8 +555,16 @@ Component.prototype.registerDOMEvents = function registerDOMEvents(obj) {
       if (validationkit.isNotEmpty(matches)) {
         for (let i = 0; i < matches.length; i++) {
           Object.keys(obj[qs]).map(function(eventName) {
-            if (eventName == 'ready') obj[qs][eventName].call(self)
-            else matches[i].addEventListener(eventName, obj[qs][eventName])
+            if (eventName == 'ready') {
+              functionkit.waitForIt(
+                function() {return validationkit.isNotEmpty(Frond.getDocument().querySelector(qs))},
+                function() {return obj[qs][eventName].call(self)}
+              )
+            }
+            else matches[i].addEventListener(eventName, function(e) {
+              e.preventDefault()
+              return obj[qs][eventName].call(this, e, self)
+            })
           })
         }
       }
