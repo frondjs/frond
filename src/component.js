@@ -558,7 +558,7 @@ Component.prototype.registerDOMEvents = function registerDOMEvents(obj) {
             if (eventName == 'ready') {
               functionkit.waitForIt(
                 function() {return validationkit.isNotEmpty(Frond.getDocument().querySelector(qs))},
-                function() {return obj[qs][eventName].call(self)}
+                function() {return obj[qs][eventName].call(self, matches[i], self)}
               )
             }
             else matches[i].addEventListener(eventName, function(e) {
