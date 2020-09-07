@@ -33,7 +33,7 @@ function Frond() {
   this.documentParsers = {}
   this.translations = {}
 
-  this.reDirectiveMatcher = /(@)((router)|(props)|(state))(\.)[a-zA-Z0-9_\-.]+/gm
+  this.reDirectiveMatcher = /(@)((router)|(props)|(state))(\.)[a-zA-Z0-9_\-.]+(@((props)|(state))\.[a-zA-Z0-9_\-.]+)?/gm
   this.reComponentDirectiveMatcher = /(@)(component)(\.)[a-zA-Z0-9_\-.]+/m
   this.reRouterDirectiveMatcher = /(@)(router)(\.)[a-zA-Z0-9_\-.]+/
   this.reDocumentDirectiveMatcher = /(@)(document)(\.)[a-zA-Z0-9_\-.]+/
@@ -59,12 +59,16 @@ Frond.prototype.componentLifecycleEvents = [
 ]
 
 Frond.prototype.translate = function translate(locale, component, input) {
+  if (typekit.isString(input) && input == '') return input
+
   const translation = objectkit.getProp(this.translations, [locale, component, input])
+
   if (!translation) {
     if (locale != this.config('locale'))
       this.log('warning', 'Translation not found for the following input.', {input: input, locale: locale})
     return input
   }
+
   return translation[1]
 }
 

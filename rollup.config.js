@@ -50,6 +50,6 @@ module.exports = {
     commonjs(),
     babel(),
     json(),
-    terser({sourcemap: false})
+    terser()
   ]
 }

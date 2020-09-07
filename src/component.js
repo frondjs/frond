@@ -53,13 +53,13 @@ Component.prototype.render = function render() {
   if (this.initialRenderDone !== true) {
     this.registerLifecycleEvents(this.config.on)
     this.readModel(this.config)
-    this.initialRenderDone = true
   }
   this.readView(this.config.view, null, {
     markup: 'html',
     hasCommonComponent: Frond.hasCommonComponent(this.config.view)
   })
   this.registerDOMEvents(this.config.on)
+  this.initialRenderDone = true
   return this
 }
 
@@ -169,8 +169,11 @@ Component.prototype.readView = function readView(view, domParentNode = null, vie
     // object inputs require more in-depth analysis
     else if (typekit.isObject(input)) {
       // resolve input's expression
-      const isExpression = this.isExpression(Object.keys(input)[0])
-      const resolved = isExpression ? this.resolveExpression(input, isExpression) : input
+      const _isExpression = this.isExpression(Object.keys(input)[0])
+      const _resolved = _isExpression ? this.resolveExpression(input, _isExpression) : input
+      // double check. sometimes a for loop came after case expression.
+      const isExpression = typekit.isObject(_resolved) ? this.isExpression(Object.keys(_resolved)[0]) : false
+      const resolved = isExpression ? this.resolveExpression(_resolved, isExpression) : _resolved
 
       // do the same thing as done above for string inputs
       if (Frond.isComponentDirective(resolved)) {
@@ -192,13 +195,13 @@ Component.prototype.readView = function readView(view, domParentNode = null, vie
         const domNode = this.buildDOMNode(domTag, resolved[domTag], viewContext)
         if (typekit.isNull(domParentNode)) {
           this.rootNodes = this.rootNodes.concat([domNode])
-          if (this.rootNodes.length === this.numTotalRootNodes) this.emit('insert')
+          if (this.rootNodes.length === this.numTotalRootNodes && !this.initialRenderDone) this.emit('insert')
         }
         else domParentNode.insertBefore(domNode, null)
 
         // handle text if value is just text
         if (typekit.isString(resolved[domTag])) {
-          resolved[domTag] = {children: [resolved[domTag]]}
+          resolved[domTag] = {children: [this.translate(resolved[domTag], {componentID: this.config.id})]}
         }
 
         // continue reading it's children.
@@ -229,9 +232,14 @@ Component.prototype.readView = function readView(view, domParentNode = null, vie
             const domNode = this.buildDOMNode(domTag, resolvedItem[domTag], viewContext)
             if (typekit.isNull(domParentNode)) {
               this.rootNodes = this.rootNodes.concat([domNode])
-              if (this.rootNodes.length === this.numTotalRootNodes) this.emit('insert')
+              if (this.rootNodes.length === this.numTotalRootNodes && !this.initialRenderDone) this.emit('insert')
             }
             else domParentNode.insertBefore(domNode, null)
+
+            // handle text if value is just text
+            if (typekit.isString(resolvedItem[domTag])) {
+              resolvedItem[domTag] = {children: [this.translate(resolvedItem[domTag], {componentID: this.config.id})]}
+            }
 
             if (validationkit.isNotEmpty(resolvedItem[domTag].children)) {
               if (domTag.toLowerCase() == 'svg') viewContext.markup = 'svg'
@@ -252,19 +260,7 @@ Component.prototype.readView = function readView(view, domParentNode = null, vie
 }
 
 Component.prototype.translate = function translate(input, topts) {
-  const locale = Frond.config('locale')
-
-  const w = Frond.getWindow()
-  if (w.__FROND_LOCALIZE__) {
-    if (!w.__FROND_TRANSLATION_KEYS__.hasOwnProperty(topts.componentID))
-      w.__FROND_TRANSLATION_KEYS__[topts.componentID] = []
-    const t = {input: input}
-    if (validationkit.isNotEmpty(topts.componentID)) t.componentID = topts.componentID
-    if (validationkit.isNotEmpty(topts.note)) t.note = topts.note
-    w.__FROND_TRANSLATION_KEYS__[topts.componentID].push(t)
-  }
-
-  return Frond.translate(locale, topts.componentID, input)
+  return Frond.translate(Frond.config('locale'), topts.componentID, input)
 }
 
 Component.prototype.isParsableDocumentExpression = function isParsableDocumentExpression(str) {
@@ -323,21 +319,38 @@ Component.prototype.resolveExpression = function resolveExpression(obj, expressi
       const fk = k.trim().replace(/[\s]{2,}/g, ' ')
       const arr = fk.slice(9).split(' ')
       if (arr.length !== 3) throw new Error('Invalid statement: ' + k)
-      const [varNameStr, operator, dataPathStr] = arr
+      const [varNames, operator, dataPathStr] = arr
       const actualValue = this.parseDirective(dataPathStr)
       if (validationkit.isNotEmpty(actualValue) && typekit.isArray(actualValue)) {
-        const literalPaths = Object.keys(objectkit.flatten(actualValue[0]))
+        const literalPaths = typekit.isObject(actualValue)
+          ? Object.keys(objectkit.flatten(actualValue[0]))
+          : typekit.isArray(actualValue)
+            ? actualValue
+            : []
         const iterTemplate = obj[k]
         const iterTemplateStr = JSON.stringify(iterTemplate)
+        const varNamesArr = varNames.split(',')
+        const varNameStr = varNamesArr[0]
+        const indexVarName = varNamesArr.length > 1 ? varNamesArr[1] : undefined
 
-        return actualValue.map(function(o) {
+        return actualValue.map(function(o, ind) {
+          // replace index numbers
+          const preparsedTemplateStr = indexVarName
+            ? iterTemplateStr.replace(new RegExp('@' + indexVarName, 'gm'), ind)
+            : iterTemplateStr
           const templateStr = literalPaths.reduce(function(memo, literalPath) {
-            memo = memo.replace(
-              new RegExp('@' + varNameStr + '.' + literalPath, 'gm'),
-              objectkit.getProp(o, literalPath.split('.'))
-            )
+            if (typekit.isString(o)) {
+              memo = memo.replace(new RegExp('@' + varNameStr, 'gm'), o)
+            }
+            else if (typekit.isObject(o)) {
+              memo = memo.replace(
+                new RegExp('@' + varNameStr + '.' + literalPath, 'gm'),
+                objectkit.getProp(o, literalPath.split('.'))
+              )
+            }
+            else {}
             return memo
-          }, iterTemplateStr)
+          }, preparsedTemplateStr)
 
           return JSON.parse(templateStr)
         })
@@ -367,9 +380,11 @@ Component.prototype.resolveExpression = function resolveExpression(obj, expressi
           const [dataPathStr, operator, valueStr] = arr
           if (!this.isExpressionOperator(operator)) throw new Error('Invalid expression operator: ' + operator)
           const actualValue = this.parseDirective(dataPathStr)
-          const inputValue = functionkit.destringify(this.parseDirective(valueStr), typekit.getType(actualValue))
-          if (this.checkExpressionCondition(actualValue, inputValue, operator) === true) {
-            return obj[k]
+          if (!typekit.isUndefined(actualValue)) {
+            const inputValue = functionkit.destringify(this.parseDirective(valueStr), typekit.getType(actualValue))
+            if (this.checkExpressionCondition(actualValue, inputValue, operator) === true) {
+              return obj[k]
+            }
           }
         }
         else {
@@ -385,10 +400,21 @@ Component.prototype.resolveExpression = function resolveExpression(obj, expressi
 }
 
 Component.prototype.parseDirective = function parseDirective(str) {
+  if (str.length === 0) return str
+  if (str.slice(0, 1) != '@') return str
+  const directives = str.split('@').filter(s => s)
+  if (directives.length > 1) {
+    const final = '@' + directives
+      .map((d, i) => i == directives.length-1 ? this.parseDirective('@' + directives[directives.length-1]) : d)
+      .join('')
+    return this.parseDirective(final)
+  }
   const arr = str.slice(1).split('.')
   const [resource, ...rest] = arr
   if (resource == 'router') {
-    return Frond.getRouter(arr[1]).get(arr[2]).fullpath
+    const routeid = arr[2]
+    const routelocale = arr.length > 3 ? arr[3] : undefined
+    return Frond.getRouter(arr[1]).get(routeid, routelocale).fullpath
   }
   else if (resource == 'state') {
     return objectkit.getProp(this.stateManager.getState(), rest)
@@ -480,7 +506,7 @@ Component.prototype.setAttribute = function setAttribute(node, attr, value, cont
     case 'text':
       const textnode = Frond.getDocument().createTextNode(
         self.parseValue(
-          self.translate(resolved, {componentID: this.config.id})
+          self.translate(resolved, {componentID: self.config.id})
         )
       )
       node.insertBefore(textnode, null)
@@ -491,9 +517,9 @@ Component.prototype.setAttribute = function setAttribute(node, attr, value, cont
         if (self.isRouteDescription(resolved)) {
           const directive = self.resolveRouteDescription(resolved)
           node.addEventListener('click', function(event) {
-            event.preventDefault()
+            //event.preventDefault()
             Frond.getRouter(directive.routerID).shift(directive.routeID)
-            return false
+            //return false
           })
         }
 
@@ -501,6 +527,15 @@ Component.prototype.setAttribute = function setAttribute(node, attr, value, cont
 
         if (node.tagName.toLowerCase() != 'a') return;
       }
+    break;
+    case 'title':
+    case 'alt':
+      formatted = self.parseValue(self.translate(resolved, {componentID: self.config.id}))
+    break;
+    case 'translate':
+      const keys = typekit.isString(resolved) ? [resolved] : resolved
+      keys.map(k => self.translate(k, {componentID: self.config.id}))
+      return;
     break;
     default:
       formatted = self.parseValue(resolved)
@@ -562,7 +597,7 @@ Component.prototype.registerDOMEvents = function registerDOMEvents(obj) {
               )
             }
             else matches[i].addEventListener(eventName, function(e) {
-              e.preventDefault()
+              //e.preventDefault()
               return obj[qs][eventName].call(this, e, self)
             })
           })

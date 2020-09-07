@@ -120,33 +120,6 @@ Router.prototype.insertRoute = function insertRoute(obj) {
   // any additional props the developer add hasn't removed
   this.routes.push(obj)
 
-  // check localization mode
-  const w = Frond.getWindow()
-  if (w.__FROND_LOCALIZE__) {
-    if (!w.__FROND_TRANSLATION_KEYS__.hasOwnProperty('routes'))
-      w.__FROND_TRANSLATION_KEYS__.routes = []
-    if (validationkit.isNotEmpty(obj.path))
-      w.__FROND_TRANSLATION_KEYS__.routes.push({
-        input: obj.path,
-        note: 'This should be a path name. As a part of the URL. (No spaces or non-alphanumeric characters, except dash.) Do not change this unless you know what you are doing. Choose carefully and wisely if you are translating this for the first time.'
-      })
-    if (validationkit.isNotEmpty(obj.metadata.title))
-      w.__FROND_TRANSLATION_KEYS__.routes.push({
-        input: obj.metadata.title,
-        note: 'Title of the page: "' + obj.fullpath + '". This will appear on the site, search engines and social media sites.'
-      })
-    if (validationkit.isNotEmpty(obj.metadata.description))
-      w.__FROND_TRANSLATION_KEYS__.routes.push({
-        input: obj.metadata.description,
-        note: 'Short description of the page: "' + obj.fullpath + '". (Not more than 255 characters in general.) This will appear on the site, search engines and social media sites.'
-      })
-    if (validationkit.isNotEmpty(objectkit.getProp(obj.metadata, ['richcontent', 'html'])))
-      w.__FROND_TRANSLATION_KEYS__.routes.push({
-        input: obj.metadata.richcontent.html,
-        note: 'HTML Content of the page: "' + obj.fullpath + '". Translator must have a basic knowledge about HTML markup.'
-      })
-  }
-
   return this
 }
 
@@ -205,7 +178,15 @@ Router.prototype.get = function get(id, locale = undefined) {
   for (let i = 0; i < len; i++) {
     const route = this.routes[i]
     if (route.id == id) {
-      return route
+      if (this.config.appLocale != locale) {
+        const search = this.slugifyLocale(this.config.appLocale)
+        const replacement = this.slugifyLocale(locale)
+        const localizedFullpath = route.fullpath.split('/').map(p => p == search ? replacement : p).join('/')
+        return Object.assign({}, route, {fullpath: localizedFullpath})
+      }
+      else {
+        return route
+      }
     }
   }
 
