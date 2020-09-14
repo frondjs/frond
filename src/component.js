@@ -30,7 +30,8 @@ Component.prototype.validExpressionOperators = [
 Component.prototype.isExpression = function isExpression(str) {
   for (let i = 0; i < this.expressionPrefixes.length; i++) {
     const p = this.expressionPrefixes[i]
-    if (str.indexOf(p) === 0) return p
+    const spaceSuffix = p != 'otherwise' ? ' ' : ''
+    if (str.indexOf(p + spaceSuffix) === 0) return p
   }
   return false
 }
