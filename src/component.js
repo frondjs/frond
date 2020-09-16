@@ -518,9 +518,9 @@ Component.prototype.setAttribute = function setAttribute(node, attr, value, cont
         if (self.isRouteDescription(resolved)) {
           const directive = self.resolveRouteDescription(resolved)
           node.addEventListener('click', function(event) {
-            //event.preventDefault()
+            event.preventDefault()
             Frond.getRouter(directive.routerID).shift(directive.routeID)
-            //return false
+            return false
           })
         }
 
