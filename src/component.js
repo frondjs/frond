@@ -1,6 +1,6 @@
 import {typekit, objectkit, validationkit, functionkit} from 'basekits'
-import StateManagerObject from 'state-manager-object'
 import EventEmitterObject from 'event-emitter-object'
+import Model from './model'
 import Frond from './frond'
 
 function Component(config) {
@@ -8,10 +8,8 @@ function Component(config) {
 
   this.config = config
   this.rootNodes = []
-  this.data = {props: {}}
-  this.dataTypes = {props: {}, state: {}}
-  this.stateManager = undefined
   this.initialRenderDone = false
+  this.model = undefined
 
   Frond.registerComponent(this)
 }
@@ -53,8 +51,9 @@ Component.prototype.checkExpressionCondition = function checkExpressionCondition
 Component.prototype.render = function render() {
   if (this.initialRenderDone !== true) {
     this.registerLifecycleEvents(this.config.on)
-    this.readModel(this.config)
+    this.model = new Model(this)
   }
+
   this.readView(this.config.view, null, {
     markup: 'html',
     hasCommonComponent: Frond.hasCommonComponent(this.config.view)
@@ -64,72 +63,41 @@ Component.prototype.render = function render() {
   return this
 }
 
-Component.prototype.readModel = function readModel(config) {
-  const self = this
-  if (validationkit.isEmpty(config.model)) return;
+Component.prototype.rebuildDOMTree = function rebuildDOMTree(curState, prevState) {
+  const parent = this.rootNodes[0].parentNode
+  const backupRootNodes = [].concat(this.rootNodes)
 
-  const model = typekit.isFunction(config.model) ? config.model.apply(self) : config.model
+  this.render()
 
-  // store props
-  if (validationkit.isNotEmpty( typekit.isObject( objectkit.getProp(model, 'props') ) )) {
-    self.data.props = model.props
-
-    // remember types
-    Object.keys(self.data.props).map(prop => {
-      self.dataTypes.props[prop] = typekit.getType(self.data.props[prop])
-    })
+  for (let i = 0; i < backupRootNodes.length; i++) {
+    parent.replaceChild(this.rootNodes[i], backupRootNodes[i])
   }
 
-  // store state
-  if (validationkit.isNotEmpty( typekit.isObject( objectkit.getProp(model, 'state') ) )) {
-    self.stateManager = new StateManagerObject(model.state)
-
-    self.stateManager.on('update', function(curState, prevState) {
-      // rebuild entire dom tree of the component
-      const parent = self.rootNodes[0].parentNode
-      const backupRootNodes = [].concat(self.rootNodes)
-      self.render()
-      for (let i = 0; i < backupRootNodes.length; i++) {
-        parent.replaceChild(self.rootNodes[i], backupRootNodes[i])
-      }
-      self.emit('update', [curState, prevState])
-    })
-
-    // remember types
-    Object.keys(model.state).map(prop => {
-      self.dataTypes.state[prop] = typekit.getType(model.state[prop])
-    })
-  }
-
-  // apply fetch config
-  if (validationkit.isNotEmpty( objectkit.getProp(model, 'fetch') )) {
-    const fetchConfig = model.fetch
-    if (validationkit.isNotEmpty( objectkit.getProp(fetchConfig, 'client') )) {
-      Frond.activateNetworkClient(fetchConfig.client)
-    }
-    self.emit('beforeFetch')
-    Frond.getNetworkClient().fetch(fetchConfig, function(err, response) {
-      if (validationkit.isNotEmpty(objectkit.getProp(response, 'body'))) {
-        self.emit('fetch', response)
-      }
-    })
-  }
-}
-
-Component.prototype.getData = function getData() {
-  return Object.assign({}, this.data, {state: this.stateManager ? this.stateManager.getState() : {}})
-}
-
-Component.prototype.getProps = function getProps() {
-  return this.data.props
+  this.emit('update', [curState, prevState])
 }
 
 Component.prototype.getState = function getState() {
-  return this.stateManager ? this.stateManager.getState() : undefined
+  return this.model.getState()
 }
 
-Component.prototype.getDataType = function getDataType(path) {
-  return objectkit.getProp(this.dataTypes, path)
+Component.prototype.update = function update(payload) {
+  return this.model.update(payload)
+}
+
+Component.prototype.getForm = function getForm() {
+  return this.model.getForm()
+}
+
+Component.prototype.updateFormDataFlat = function updateFormDataFlat(name, value) {
+  return this.model.updateFormDataFlat(name, value)
+}
+
+Component.prototype.updateFormData = function updateFormData(payload, opts) {
+  return this.model.updateFormData(payload, opts)
+}
+
+Component.prototype.getFormField = function getFormField(name) {
+  return this.model.getFormField(name)
 }
 
 Component.prototype.readView = function readView(view, domParentNode = null, viewContext = {}) {
@@ -289,6 +257,156 @@ Component.prototype.buildDOMNode = function buildDOMNode(tag, obj, context) {
 
   if (!typekit.isObject(obj)) return node
 
+  // check form inputs
+  // values of the form inputs controlled internally if there is form schema defined
+
+  // control all input elements except $exceptionalInputTypes
+  const exceptionalInputTypes = ['checkbox', 'radio', 'file']
+  if (
+    tag == 'input' &&
+    obj.hasOwnProperty('name') &&
+    obj.hasOwnProperty('type') &&
+    exceptionalInputTypes.indexOf(obj.type) === -1 &&
+    self.model.inFormSchema(obj.name + '.value')
+  ) {
+    // set value
+    obj.value = objectkit.getProp(self.model.getFormFields(), obj.name + '.value', '')
+    // track value
+    self.updateEventListenerConfig({
+      fieldName: obj.name,
+      querySelector: 'input[name="' + obj.name + '"]',
+      eventName: 'input',
+      fn: function(e, component) {
+        self.model.updateFormDataFlat(obj.name + '.value', e.target.value)
+      }
+    })
+  }
+
+  // textarea
+  if (
+    tag == 'textarea' &&
+    obj.hasOwnProperty('name') &&
+    self.model.inFormSchema(obj.name + '.value')
+  ) {
+    // set value
+    obj.text = objectkit.getProp(self.model.getFormFields(), obj.name + '.value', '')
+    // track value
+    self.updateEventListenerConfig({
+      fieldName: obj.name,
+      querySelector: 'textarea[name="' + obj.name + '"]',
+      eventName: 'input',
+      fn: function(e, component) {
+        self.model.updateFormDataFlat(obj.name + '.value', e.target.value)
+      }
+    })
+  }
+
+  // file inputs
+  if (
+    tag == 'input' &&
+    obj.hasOwnProperty('name') &&
+    obj.hasOwnProperty('type') &&
+    obj.type == 'file' &&
+    self.model.inFormSchema(obj.name + '.value')
+  ) {
+    self.updateEventListenerConfig({
+      fieldName: obj.name,
+      querySelector: 'input[name="' + obj.name + '"]',
+      eventName: 'change',
+      fn: function(e, component) {
+        self.model.updateFormDataFlat(obj.name + '.value', e.target.files)
+      }
+    })
+  }
+
+  // checkboxes
+  if (
+    tag == 'input' &&
+    obj.hasOwnProperty('name') &&
+    obj.hasOwnProperty('type') &&
+    obj.type == 'checkbox' &&
+    self.model.inFormSchema(obj.name + '.value')
+  ) {
+    // set value
+    const cvalue = objectkit.getProp(self.model.getFormFields(), obj.name + '.value', '')
+    obj.checked = cvalue ? true : false
+    // track value
+    self.updateEventListenerConfig({
+      fieldName: obj.name,
+      querySelector: 'input[name="' + obj.name + '"]',
+      eventName: 'click',
+      fn: function(e, component) {
+        self.model.updateFormDataFlat(obj.name + '.value', e.target.checked === true)
+      }
+    })
+  }
+
+  // radio buttons
+  if (
+    tag == 'input' &&
+    obj.hasOwnProperty('name') &&
+    obj.hasOwnProperty('type') &&
+    obj.type == 'radio' &&
+    self.model.inFormSchema(obj.name + '.value')
+  ) {
+    // set value
+    const rvalue = objectkit.getProp(self.model.getFormFields(), obj.name + '.value', '')
+    obj.checked = rvalue == obj.value ? true : false
+    // track value
+    self.updateEventListenerConfig({
+      fieldName: obj.name,
+      querySelector: 'input[id="' + obj.id + '"]',
+      eventName: 'click',
+      fn: function(e, component) {
+        self.model.updateFormDataFlat(obj.name + '.value', e.target.value)
+      }
+    })
+  }
+
+  // select elements
+  if (
+    tag == 'select' &&
+    obj.hasOwnProperty('name') &&
+    self.model.inFormSchema(obj.name + '.value')
+  ) {
+    // set value
+    self.updateEventListenerConfig({
+      fieldName: obj.name,
+      querySelector: 'select[name="' + obj.name + '"]',
+      eventName: 'ready',
+      fn: function(elem, component) {
+        if (obj.hasOwnProperty('multiple')) {
+          const values = objectkit.getProp(self.model.getFormFields(), obj.name + '.value', [])
+          for (var i = 0; i < elem.options.length; i++) {
+            const o = elem.options[i]
+            if (values.indexOf(o.getAttribute('value')) !== -1) o.selected = true
+          }
+        }
+        else {
+          elem.value = objectkit.getProp(self.model.getFormFields(), obj.name + '.value', '')
+        }
+      }
+    })
+    self.updateEventListenerConfig({
+      fieldName: obj.name,
+      querySelector: 'select[name="' + obj.name + '"]',
+      eventName: 'change',
+      fn: function(e, component) {
+        if (obj.hasOwnProperty('multiple')) {
+          const values = []
+          for (var i = 0; i < e.target.options.length; i++) {
+            const o = e.target.options[i]
+            if (o.selected === true) values.push(o.getAttribute('value'))
+          }
+          self.model.updateFormDataFlat(obj.name + '.value', values)
+        }
+        else {
+          self.model.updateFormDataFlat(obj.name + '.value', e.target.value)
+        }
+      }
+    })
+  }
+
   const excludedAttrs = ['children']
   Object
     .keys(obj)
@@ -298,6 +416,21 @@ Component.prototype.buildDOMNode = function buildDOMNode(tag, obj, context) {
       else self.setAttribute(node, attr, obj[attr], context)
     })
   return node
+}
+
+Component.prototype.updateEventListenerConfig = function updateEventListenerConfig(opts) {
+  const self = this
+  const {fieldName, querySelector, eventName, fn} = opts
+  if (validationkit.isEmpty(self.config.on[querySelector])) {
+    self.config.on[querySelector] = {}
+  }
+  if (validationkit.isEmpty(objectkit.getProp(self.config, ['on', querySelector, eventName]))) {
+    self.config.on[querySelector][eventName] = []
+  }
+  if (!typekit.isArray(self.config.on[querySelector][eventName])) {
+    self.config.on[querySelector][eventName] = [self.config.on[querySelector][eventName]]
+  }
+  self.config.on[querySelector][eventName].push(fn)
 }
 
 Component.prototype.getDOMNodes = function getDOMNodes() {
@@ -322,23 +455,33 @@ Component.prototype.resolveExpression = function resolveExpression(obj, expressi
       if (arr.length !== 3) throw new Error('Invalid statement: ' + k)
       const [varNames, operator, dataPathStr] = arr
       const actualValue = this.parseDirective(dataPathStr)
-      if (validationkit.isNotEmpty(actualValue) && typekit.isArray(actualValue)) {
+      if (validationkit.isNotEmpty(actualValue)) {
         const literalPaths = typekit.isObject(actualValue)
-          ? Object.keys(objectkit.flatten(actualValue[0]))
+          ? Object.keys(objectkit.flatten(actualValue))
           : typekit.isArray(actualValue)
-            ? actualValue
-            : []
+            ? (
+                typekit.isObject(actualValue[0])
+                  ? Object.keys(objectkit.flatten(actualValue[0]))
+                  : actualValue
+              )
+            : typekit.isNumber(actualValue)
+              ? new Array(actualValue).fill(0).map((v,i) => i)
+              : []
         const iterTemplate = obj[k]
         const iterTemplateStr = JSON.stringify(iterTemplate)
         const varNamesArr = varNames.split(',')
         const varNameStr = varNamesArr[0]
         const indexVarName = varNamesArr.length > 1 ? varNamesArr[1] : undefined
+        const iterActualValue = typekit.isNumber(actualValue)
+          ? Array(actualValue).fill(0).map((v,i) => i.toString())
+          : actualValue
 
-        return actualValue.map(function(o, ind) {
+        return iterActualValue.map(function(o, ind) {
           // replace index numbers
           const preparsedTemplateStr = indexVarName
             ? iterTemplateStr.replace(new RegExp('@' + indexVarName, 'gm'), ind)
             : iterTemplateStr
+          //const reLiteralExpr = /@{[\S]+\s[+]\s[\S]+}/g
           const templateStr = literalPaths.reduce(function(memo, literalPath) {
             if (typekit.isString(o)) {
               memo = memo.replace(new RegExp('@' + varNameStr, 'gm'), o)
@@ -418,10 +561,10 @@ Component.prototype.parseDirective = function parseDirective(str) {
     return Frond.getRouter(arr[1]).get(routeid, routelocale).fullpath
   }
   else if (resource == 'state') {
-    return objectkit.getProp(this.stateManager.getState(), rest)
+    return objectkit.getProp(this.model.getState(), rest)
   }
   else if (resource == 'props') {
-    return objectkit.getProp(this.getData().props, rest)
+    return objectkit.getProp(this.model.getData().props, rest)
   }
   else if (resource == 'component') {
     if (Frond.hasComponent(rest[0]) !== true)
@@ -435,6 +578,10 @@ Component.prototype.parseDirective = function parseDirective(str) {
 
 Component.prototype.parseValue = function parseValue(str) {
   const self = this
+
+  if (typekit.isNumber(str)) return str.toString()
+  if (typekit.isBoolean(str)) return str
+
   if (!typekit.isString(str)) {
     Frond.log('error', str)
     throw new Error('Couldnt parse the value because of it is ' + typekit.getType(str))
@@ -542,7 +689,7 @@ Component.prototype.setAttribute = function setAttribute(node, attr, value, cont
       formatted = self.parseValue(resolved)
   }
 
-  if (typekit.isUndefined(formatted)) {
+  if (typekit.isUndefined(formatted) || formatted === false) {
     return;
   }
 
@@ -559,13 +706,6 @@ Component.prototype.setAttribute = function setAttribute(node, attr, value, cont
 
 Component.prototype.findDOMNodeAttrNamespace = function findDOMNodeAttrNamespace(attr, context) {
   return Frond.domNodeAttrNamespaceMap.hasOwnProperty(attr) ? Frond.domNodeAttrNamespaceMap[attr] : null
-}
-
-Component.prototype.update = function update(payload) {
-  if (this.stateManager) {
-    this.emit('beforeUpdate', [this.stateManager.getState(), payload])
-    this.stateManager.updateState(payload)
-  }
 }
 
 Component.prototype.registerLifecycleEvents = function registerLifecycleEvents(obj) {
@@ -591,15 +731,21 @@ Component.prototype.registerDOMEvents = function registerDOMEvents(obj) {
       if (validationkit.isNotEmpty(matches)) {
         for (let i = 0; i < matches.length; i++) {
           Object.keys(obj[qs]).map(function(eventName) {
+            const eventListeners = !typekit.isArray(obj[qs][eventName])
+              ? [obj[qs][eventName]]
+              : obj[qs][eventName]
             if (eventName == 'ready') {
               functionkit.waitForIt(
-                function() {return validationkit.isNotEmpty(Frond.getDocument().querySelector(qs))},
-                function() {return obj[qs][eventName].call(self, matches[i], self)}
+                function() {
+                  return validationkit.isNotEmpty(Frond.getDocument().querySelector(qs))
+                },
+                function() {
+                  return eventListeners.map(f => f.call(self, matches[i], self))
+                }
               )
             }
             else matches[i].addEventListener(eventName, function(e) {
-              //e.preventDefault()
-              return obj[qs][eventName].call(this, e, self)
+              return eventListeners.map(f => f.call(this, e, self))
             })
           })
         }
