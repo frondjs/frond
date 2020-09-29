@@ -421,6 +421,9 @@ Component.prototype.buildDOMNode = function buildDOMNode(tag, obj, context) {
 Component.prototype.updateEventListenerConfig = function updateEventListenerConfig(opts) {
   const self = this
   const {fieldName, querySelector, eventName, fn} = opts
+  if (validationkit.isEmpty(self.config.on)) {
+    self.config.on = {}
+  }
   if (validationkit.isEmpty(self.config.on[querySelector])) {
     self.config.on[querySelector] = {}
   }
