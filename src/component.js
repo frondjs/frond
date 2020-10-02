@@ -88,16 +88,67 @@ Component.prototype.getForm = function getForm() {
   return this.model.getForm()
 }
 
-Component.prototype.updateFormDataFlat = function updateFormDataFlat(name, value) {
-  return this.model.updateFormDataFlat(name, value)
+Component.prototype.getInput = function getInput(name) {
+  return this.model.getFormFieldValueFromInputName(name)
 }
 
-Component.prototype.updateFormData = function updateFormData(payload, opts) {
-  return this.model.updateFormData(payload, opts)
+Component.prototype.updateInput = function updateInput(name, value) {
+  this.model.updateFormFieldValueFromInputName(name, value, {updateDOM: true})
 }
 
-Component.prototype.getFormField = function getFormField(name) {
-  return this.model.getFormField(name)
+Component.prototype.updateInputDOM = function updateInputDOM(field, value) {
+  if (!field.qs) return false
+
+  const element = this.dom().querySelector(field.qs)
+  if (!element) return false
+
+  // input, textarea, checkbox, radio, select
+  if (!field.type) return false
+  const {type} = field
+  if (type == 'input') {
+    element.value = value
+  }
+  else if (type == 'textarea') {
+    element.value = value
+  }
+  else if (type == 'checkbox') {
+    element.checked = value === true ? true : false
+  }
+  else if (type == 'radio') {
+    const radioqs = 'input[name="' + field.name + '"][value="' + value + '"]'
+    const radioElement = this.dom().querySelector(radioqs)
+    if (radioElement) {
+      radioElement.checked = true
+    }
+  }
+  else if (type == 'select') {
+    if (field.multiple) {
+      let isChanged = false
+      for (let j = 0; j < element.options.length; j++) {
+        const opt = element.options[j]
+        const v = opt.getAttribute('value')
+        if (opt.selected === true && value.indexOf(v) === -1) {
+          opt.selected = false
+          isChanged = true
+        }
+        if (opt.selected === false && value.indexOf(v) !== -1) {
+          opt.selected = true
+          isChanged = true
+        }
+      }
+      if (isChanged) element.dispatchEvent(new Event('change'))
+    }
+    else {
+      const prevValue = element.value
+      element.value = value
+      if (prevValue != value) element.dispatchEvent(new Event('change'))
+    }
+  }
+  else {
+    return false
+  }
+
+  return true
 }
 
 Component.prototype.readView = function readView(view, domParentNode = null, viewContext = {}) {
@@ -267,17 +318,21 @@ Component.prototype.buildDOMNode = function buildDOMNode(tag, obj, context) {
     obj.hasOwnProperty('name') &&
     obj.hasOwnProperty('type') &&
     exceptionalInputTypes.indexOf(obj.type) === -1 &&
-    self.model.inFormSchema(obj.name + '.value')
+    self.model.isInputDefinedInFormSchema(obj.name)
   ) {
+    self.model.updateFormFieldAttrs(obj.name, {
+      type: 'input',
+      qs: 'input[name="' + obj.name + '"]'
+    })
     // set value
-    obj.value = objectkit.getProp(self.model.getFormFields(), obj.name + '.value', '')
+    obj.value = self.model.getFormFieldValueFromInputName(obj.name)
     // track value
     self.updateEventListenerConfig({
       fieldName: obj.name,
       querySelector: 'input[name="' + obj.name + '"]',
       eventName: 'input',
       fn: function(e, component) {
-        self.model.updateFormDataFlat(obj.name + '.value', e.target.value)
+        self.model.updateFormFieldValueFromInputName(obj.name, e.target.value)
       }
     })
   }
@@ -286,17 +341,21 @@ Component.prototype.buildDOMNode = function buildDOMNode(tag, obj, context) {
   if (
     tag == 'textarea' &&
     obj.hasOwnProperty('name') &&
-    self.model.inFormSchema(obj.name + '.value')
+    self.model.isInputDefinedInFormSchema(obj.name)
   ) {
+    self.model.updateFormFieldAttrs(obj.name, {
+      type: 'textarea',
+      qs: 'textarea[name="' + obj.name + '"]'
+    })
     // set value
-    obj.text = objectkit.getProp(self.model.getFormFields(), obj.name + '.value', '')
+    obj.text = self.model.getFormFieldValueFromInputName(obj.name)
     // track value
     self.updateEventListenerConfig({
       fieldName: obj.name,
       querySelector: 'textarea[name="' + obj.name + '"]',
       eventName: 'input',
       fn: function(e, component) {
-        self.model.updateFormDataFlat(obj.name + '.value', e.target.value)
+        self.model.updateFormFieldValueFromInputName(obj.name, e.target.value)
       }
     })
   }
@@ -307,14 +366,14 @@ Component.prototype.buildDOMNode = function buildDOMNode(tag, obj, context) {
     obj.hasOwnProperty('name') &&
     obj.hasOwnProperty('type') &&
     obj.type == 'file' &&
-    self.model.inFormSchema(obj.name + '.value')
+    self.model.isInputDefinedInFormSchema(obj.name)
   ) {
     self.updateEventListenerConfig({
       fieldName: obj.name,
       querySelector: 'input[name="' + obj.name + '"]',
       eventName: 'change',
       fn: function(e, component) {
-        self.model.updateFormDataFlat(obj.name + '.value', e.target.files)
+        self.model.updateFormFieldValueFromInputName(obj.name, e.target.files)
       }
     })
   }
@@ -325,10 +384,14 @@ Component.prototype.buildDOMNode = function buildDOMNode(tag, obj, context) {
     obj.hasOwnProperty('name') &&
     obj.hasOwnProperty('type') &&
     obj.type == 'checkbox' &&
-    self.model.inFormSchema(obj.name + '.value')
+    self.model.isInputDefinedInFormSchema(obj.name)
   ) {
+    self.model.updateFormFieldAttrs(obj.name, {
+      type: 'checkbox',
+      qs: 'input[name="' + obj.name + '"]'
+    })
     // set value
-    const cvalue = objectkit.getProp(self.model.getFormFields(), obj.name + '.value', '')
+    const cvalue = self.model.getFormFieldValueFromInputName(obj.name)
     obj.checked = cvalue ? true : false
     // track value
     self.updateEventListenerConfig({
@@ -336,7 +399,7 @@ Component.prototype.buildDOMNode = function buildDOMNode(tag, obj, context) {
       querySelector: 'input[name="' + obj.name + '"]',
       eventName: 'click',
       fn: function(e, component) {
-        self.model.updateFormDataFlat(obj.name + '.value', e.target.checked === true)
+        self.model.updateFormFieldValueFromInputName(obj.name, e.target.checked === true)
       }
     })
   }
@@ -347,10 +410,15 @@ Component.prototype.buildDOMNode = function buildDOMNode(tag, obj, context) {
     obj.hasOwnProperty('name') &&
     obj.hasOwnProperty('type') &&
     obj.type == 'radio' &&
-    self.model.inFormSchema(obj.name + '.value')
+    self.model.isInputDefinedInFormSchema(obj.name)
   ) {
+    self.model.updateFormFieldAttrs(obj.name, {
+      type: 'radio',
+      qs: 'input[id="' + obj.id + '"]',
+      name: obj.name
+    })
     // set value
-    const rvalue = objectkit.getProp(self.model.getFormFields(), obj.name + '.value', '')
+    const rvalue = self.model.getFormFieldValueFromInputName(obj.name)
     obj.checked = rvalue == obj.value ? true : false
     // track value
     self.updateEventListenerConfig({
@@ -358,7 +426,7 @@ Component.prototype.buildDOMNode = function buildDOMNode(tag, obj, context) {
       querySelector: 'input[id="' + obj.id + '"]',
       eventName: 'click',
       fn: function(e, component) {
-        self.model.updateFormDataFlat(obj.name + '.value', e.target.value)
+        self.model.updateFormFieldValueFromInputName(obj.name, e.target.value)
       }
     })
   }
@@ -367,8 +435,13 @@ Component.prototype.buildDOMNode = function buildDOMNode(tag, obj, context) {
   if (
     tag == 'select' &&
     obj.hasOwnProperty('name') &&
-    self.model.inFormSchema(obj.name + '.value')
+    self.model.isInputDefinedInFormSchema(obj.name)
   ) {
+    self.model.updateFormFieldAttrs(obj.name, {
+      type: 'select',
+      qs: 'select[name="' + obj.name + '"]',
+      multiple: obj.hasOwnProperty('multiple')
+    })
     // set value
     self.updateEventListenerConfig({
       fieldName: obj.name,
@@ -376,14 +449,14 @@ Component.prototype.buildDOMNode = function buildDOMNode(tag, obj, context) {
       eventName: 'ready',
       fn: function(elem, component) {
         if (obj.hasOwnProperty('multiple')) {
-          const values = objectkit.getProp(self.model.getFormFields(), obj.name + '.value', [])
+          const values = self.model.getFormFieldValueFromInputName(obj.name)
           for (var i = 0; i < elem.options.length; i++) {
             const o = elem.options[i]
             if (values.indexOf(o.getAttribute('value')) !== -1) o.selected = true
           }
         }
         else {
-          elem.value = objectkit.getProp(self.model.getFormFields(), obj.name + '.value', '')
+          elem.value = self.model.getFormFieldValueFromInputName(obj.name)
         }
       }
     })
@@ -398,10 +471,10 @@ Component.prototype.buildDOMNode = function buildDOMNode(tag, obj, context) {
             const o = e.target.options[i]
             if (o.selected === true) values.push(o.getAttribute('value'))
           }
-          self.model.updateFormDataFlat(obj.name + '.value', values)
+          self.model.updateFormFieldValueFromInputName(obj.name, values)
         }
         else {
-          self.model.updateFormDataFlat(obj.name + '.value', e.target.value)
+          self.model.updateFormFieldValueFromInputName(obj.name, e.target.value)
         }
       }
     })
@@ -433,7 +506,7 @@ Component.prototype.updateEventListenerConfig = function updateEventListenerConf
   if (!typekit.isArray(self.config.on[querySelector][eventName])) {
     self.config.on[querySelector][eventName] = [self.config.on[querySelector][eventName]]
   }
-  self.config.on[querySelector][eventName].push(fn)
+  self.config.on[querySelector][eventName].unshift(fn)
 }
 
 Component.prototype.getDOMNodes = function getDOMNodes() {
@@ -568,6 +641,9 @@ Component.prototype.parseDirective = function parseDirective(str) {
   }
   else if (resource == 'props') {
     return objectkit.getProp(this.model.getData().props, rest)
+  }
+  else if (resource == 'form') {
+    return this.model.getFormFieldValueFromInputName(rest)
   }
   else if (resource == 'component') {
     if (Frond.hasComponent(rest[0]) !== true)
@@ -723,37 +799,44 @@ Component.prototype.registerLifecycleEvents = function registerLifecycleEvents(o
 }
 
 Component.prototype.registerDOMEvents = function registerDOMEvents(obj) {
-  if (!validationkit.isObject(obj)) return;
   const self = this
+
+  if (!validationkit.isObject(obj)) return self;
+
   const rootDomNode = this.rootNodes[0]
-  Object
-    .keys(obj)
-    .filter(qs => typekit.isObject(obj[qs]))
-    .map(function(qs) {
-      const matches = rootDomNode.querySelectorAll(qs)
-      if (validationkit.isNotEmpty(matches)) {
-        for (let i = 0; i < matches.length; i++) {
-          Object.keys(obj[qs]).map(function(eventName) {
-            const eventListeners = !typekit.isArray(obj[qs][eventName])
-              ? [obj[qs][eventName]]
-              : obj[qs][eventName]
-            if (eventName == 'ready') {
-              functionkit.waitForIt(
-                function() {
-                  return validationkit.isNotEmpty(Frond.getDocument().querySelector(qs))
-                },
-                function() {
-                  return eventListeners.map(f => f.call(self, matches[i], self))
-                }
-              )
-            }
-            else matches[i].addEventListener(eventName, function(e) {
-              return eventListeners.map(f => f.call(this, e, self))
+
+  const querystrings = Object.keys(obj).filter(qs => typekit.isObject(obj[qs]))
+  for (let i = 0; i < querystrings.length; i++) {
+    const qs = querystrings[i]
+    const matches = rootDomNode.querySelectorAll(qs)
+    if (validationkit.isNotEmpty(matches)) {
+      for (let j = 0; j < matches.length; j++) {
+        const match = matches[j]
+        const events = Object.keys(obj[qs])
+        for (let k = 0; k < events.length; k++) {
+          const evname = events[k]
+          const evlisteners = !typekit.isArray(obj[qs][evname]) ? [obj[qs][evname]] : obj[qs][evname]
+
+          if (evname == 'ready') {
+            delete obj[qs][evname]
+            functionkit.waitForIt(
+              () => validationkit.isNotEmpty(Frond.getDocument().querySelector(qs)),
+              () => evlisteners.map(f => f.call(self, match, self)),
+              100,
+              500
+            )
+          }
+          else {
+            match.addEventListener(evname, function(e) {
+              evlisteners.map(f => f.call(this, e, self))
             })
-          })
+          }
         }
       }
-    })
+    }
+  }
+
+  return self
 }
 
 Component.prototype.registerComponentDOMEventListeners = function registerComponentDOMEventListeners(qs, obj) {

@@ -1,5 +1,6 @@
 import {typekit, objectkit, validationkit, functionkit} from 'basekits'
 import EventEmitterObject from 'event-emitter-object'
+import StateManagerObject from 'state-manager-object'
 import scripter from 'dom-scripter'
 import {htmlParser} from './document-parsers'
 
@@ -26,6 +27,7 @@ function Frond() {
     networkClients: {},
     routers: {}
   }
+  this.stateManager = undefined
   this.multilingual = false
   this.activeApp = undefined
   this.activeNetworkClient = undefined
@@ -57,6 +59,19 @@ Frond.prototype.constructor = Frond
 Frond.prototype.componentLifecycleEvents = [
   'init', 'insert', 'beforeUpdate', 'update', 'beforeFetch', 'fetch'
 ]
+
+Frond.prototype.createState = function createState(payload) {
+  this.stateManager = new StateManagerObject(payload)
+  return this
+}
+
+Frond.prototype.updateState = function updateState(payload) {
+  return this.stateManager.updateState(payload)
+}
+
+Frond.prototype.getState = function getState() {
+  return this.stateManager ? this.stateManager.getState() : undefined
+}
 
 Frond.prototype.translate = function translate(locale, component, input) {
   if (typekit.isString(input) && input == '') return input

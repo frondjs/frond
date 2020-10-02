@@ -48,7 +48,6 @@ Model.prototype.read = function read() {
   // check form schema
   if (validationkit.isNotEmpty( typekit.isObject( objectkit.getProp(model, 'form') ) )) {
     this.data._form = model.form
-    this.data._form.fields = objectkit.flatten(this.data._form.fields)
   }
 
   // check network request configuration
@@ -90,39 +89,157 @@ Model.prototype.getFormFields = function getFormFields() {
 }
 
 Model.prototype.getFormField = function getFormField(name) {
-  const flatName = name.indexOf('.value') === -1 ? name + '.value' : name
-  const match = objectkit.getProp(this.getFormFields(), flatName)
-  if (typekit.isUndefined(match)) {
-    const match2 = objectkit.getProp(objectkit.unflatten(this.getFormFields()), name)
-    const match2Formatted = match2.map(function(obj) {
-      return Object.keys(obj).reduce(function(memo, key) {
-        memo[key] = objectkit.getProp(obj[key], 'value', obj[key])
-        return memo
-      }, {})
-    })
-    return match2Formatted
+  // name here is a top level property in form fields
+  return objectkit.getProp(this.getFormFields(), name)
+}
+
+Model.prototype.getFormFieldValueFromInputName = function getFormFieldValueFromInputName(name) {
+  // possible name values are "example", "example[0].test"
+  if (/\[[0-9]+\]\./.test(name)) {
+    const n = name.slice(0, name.indexOf('['))
+    const ind = parseFloat(name.slice(name.indexOf('[')+1, name.indexOf(']')))
+    const childn = name.slice(name.indexOf('].') + 2)
+
+    const fieldarr = objectkit.getProp(this.data._form.fields, n)
+    if (!typekit.isArray(fieldarr)) return undefined
+    if (fieldarr.length - 1 < ind) return undefined
+    if (!typekit.isObject(fieldarr[ind])) return undefined
+    if (typekit.isUndefined(objectkit.getProp(fieldarr[ind], [childn, 'value']))) return undefined
+
+    return this.data._form.fields[n][ind][childn].value
   }
-  return match
-}
 
-Model.prototype.updateFormDataFlat = function updateFormDataFlat(name, value) {
-  const prevValue = this.data._form.fields[name]
-  if (!validationkit.isEqual(prevValue, value)) {
-    this.data._form.fields[name] = value
-    const field = name.indexOf('.value') !== -1 ? name.replace('.value', '') : name
-    this.component.emit('formUpdate', [field, value, prevValue])
+  if (!typekit.isUndefined(objectkit.getProp(this.data._form.fields[name], 'value'))) {
+    return this.data._form.fields[name].value
   }
+
+  return undefined
 }
 
-Model.prototype.updateFormData = function updateFormData(payload, opts={}) {
-  const _opts = Object.assign({}, opts || {})
-  const updatedFormData = objectkit.assignDeep([objectkit.unflatten(this.getFormFields()), payload], _opts)
-  this.data._form.fields = objectkit.flatten(updatedFormData)
+Model.prototype.updateFormField = function updateFormField(name, payload, _opts={}) {
+  // name here is a top level property in form fields
+  const opts = Object.assign({}, {concat: true}, _opts)
+  const fieldobj = this.data._form.fields[name]
+  if (typekit.isObject(fieldobj) && typekit.isObject(payload)) {
+    this.data._form.fields[name] = opts.concat === true
+      ? Object.assign({}, this.data._form.fields[name], payload)
+      : payload
+    return true
+  }
+  if (typekit.isArray(fieldobj) && typekit.isArray(payload)) {
+    this.data._form.fields[name] = opts.concat === true
+      ? this.data._form.fields[name].concat(payload)
+      : payload
+    return true
+  }
+  return false
 }
 
-Model.prototype.inFormSchema = function inFormSchema(name) {
-  const fields = this.getFormFields()
-  return validationkit.isNotEmpty(fields) && fields.hasOwnProperty(name)
+Model.prototype.updateFormFieldAttrs = function updateFormFieldAttrs(name, payload, _opts={}) {
+  // possible name values are "example", "example[0].test"
+  const opts = Object.assign({}, {concat: true}, _opts)
+
+  if (/\[[0-9]+\]\./.test(name)) {
+    const n = name.slice(0, name.indexOf('['))
+    const ind = parseFloat(name.slice(name.indexOf('[')+1, name.indexOf(']')))
+    const childn = name.slice(name.indexOf('].') + 2)
+
+    const fieldarr = objectkit.getProp(this.data._form.fields, n)
+    if (!typekit.isArray(fieldarr)) return false
+    if (fieldarr.length - 1 < ind) return false
+    if (!typekit.isObject(fieldarr[ind])) return false
+    if (typekit.isUndefined(objectkit.getProp(fieldarr[ind], [childn, 'value']))) return false
+
+    const prevValue = this.data._form.fields[n][ind][childn].value
+    this.data._form.fields[n][ind][childn] = opts.concat === true
+      ? Object.assign({}, this.data._form.fields[n][ind][childn], payload)
+      : payload
+    const currentValue = this.data._form.fields[n][ind][childn].value
+
+    if (!validationkit.isEqual(prevValue, currentValue)) {
+      const fieldobj = this.data._form.fields[n][ind][childn]
+      if (fieldobj.qs) this.component.updateInputDOM(fieldobj, currentValue)
+      this.component.emit('formUpdate', [name, currentValue, prevValue])
+    }
+
+    return true
+  }
+
+  if (!typekit.isUndefined(objectkit.getProp(this.data._form.fields[name], 'value'))) {
+    const prevValue = this.data._form.fields[name].value
+    this.data._form.fields[name] = opts.concat === true
+      ? Object.assign({}, this.data._form.fields[name], payload)
+      : payload
+    const currentValue = this.data._form.fields[name].value
+
+    if (!validationkit.isEqual(prevValue, currentValue)) {
+      const fieldobj = this.data._form.fields[name]
+      if (fieldobj.qs) this.component.updateInputDOM(fieldobj, currentValue)
+      this.component.emit('formUpdate', [name, currentValue, prevValue])
+    }
+
+    return true
+  }
+
+  return false
+}
+
+Model.prototype.updateFormFieldValueFromInputName = function updateFormFieldValueFromInputName(name, value, _opts={}) {
+  // possible name values are "example", "example[0].test"
+  const opts = Object.assign({}, {updateDOM: true}, _opts)
+  if (/\[[0-9]+\]\./.test(name)) {
+    const n = name.slice(0, name.indexOf('['))
+    const ind = parseFloat(name.slice(name.indexOf('[')+1, name.indexOf(']')))
+    const childn = name.slice(name.indexOf('].') + 2)
+
+    const fieldarr = objectkit.getProp(this.data._form.fields, n)
+    if (!typekit.isArray(fieldarr)) return false
+    if (fieldarr.length - 1 < ind) return false
+    if (!typekit.isObject(fieldarr[ind])) return false
+    if (typekit.isUndefined(objectkit.getProp(fieldarr[ind], [childn, 'value']))) return false
+
+    const prevValue = this.data._form.fields[n][ind][childn].value
+    this.data._form.fields[n][ind][childn].value = value
+    if (opts.updateDOM) {
+      this.component.updateInputDOM(this.data._form.fields[n][ind][childn], value)
+    }
+    this.component.emit('formUpdate', [name, value, prevValue])
+    return true
+  }
+
+  if (!typekit.isUndefined(objectkit.getProp(this.data._form.fields[name], 'value'))) {
+    const prevValue = this.data._form.fields[name].value
+    this.data._form.fields[name].value = value
+    if (opts.updateDOM) {
+      this.component.updateInputDOM(this.data._form.fields[name], value)
+    }
+    this.component.emit('formUpdate', [name, value, prevValue])
+    return true
+  }
+
+  return false
+}
+
+Model.prototype.isInputDefinedInFormSchema = function isInputDefinedInFormSchema(name) {
+  // possible name values are "example", "example[0].test"
+  if (/\[[0-9]+\]\./.test(name)) {
+    const n = name.slice(0, name.indexOf('['))
+    const ind = parseFloat(name.slice(name.indexOf('[')+1, name.indexOf(']')))
+    const childn = name.slice(name.indexOf('].') + 2)
+
+    const fieldarr = objectkit.getProp(this.data._form.fields, n)
+    if (!typekit.isArray(fieldarr)) return false
+    if (fieldarr.length - 1 < ind) return false
+    if (!typekit.isObject(fieldarr[ind])) return false
+    if (typekit.isUndefined(objectkit.getProp(fieldarr[ind], [childn, 'value']))) return false
+    return true
+  }
+
+  if (!typekit.isUndefined(objectkit.getProp(this.data._form.fields[name], 'value'))) {
+    return true
+  }
+
+  return false
 }
 
 Model.prototype.getDataType = function getDataType(path) {
