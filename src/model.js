@@ -93,7 +93,28 @@ Model.prototype.getFormField = function getFormField(name) {
   return objectkit.getProp(this.getFormFields(), name)
 }
 
-Model.prototype.getFormFieldValueFromInputName = function getFormFieldValueFromInputName(name) {
+Model.prototype.getFormPayload = function getFormPayload() {
+  const self = this
+  const fields = this.getFormFields()
+  return Object.keys(fields).reduce(function(memo, name) {
+    if (typekit.isObject(fields[name])) {
+      memo[name] = fields[name].value
+    }
+
+    if (typekit.isArray(fields[name])) {
+      memo[name] = fields[name].map(function(obj) {
+        return Object.keys(obj).reduce(function(m, subname) {
+          m[subname] = obj[subname].value
+          return m
+        }, {})
+      })
+    }
+
+    return memo
+  }, {})
+}
+
+Model.prototype.getFormFieldFromInputName = function getFormFieldFromInputName(name) {
   // possible name values are "example", "example[0].test"
   if (/\[[0-9]+\]\./.test(name)) {
     const n = name.slice(0, name.indexOf('['))
@@ -104,16 +125,29 @@ Model.prototype.getFormFieldValueFromInputName = function getFormFieldValueFromI
     if (!typekit.isArray(fieldarr)) return undefined
     if (fieldarr.length - 1 < ind) return undefined
     if (!typekit.isObject(fieldarr[ind])) return undefined
-    if (typekit.isUndefined(objectkit.getProp(fieldarr[ind], [childn, 'value']))) return undefined
-
-    return this.data._form.fields[n][ind][childn].value
+    return fieldarr[ind][childn]
   }
 
-  if (!typekit.isUndefined(objectkit.getProp(this.data._form.fields[name], 'value'))) {
-    return this.data._form.fields[name].value
+  if (!typekit.isUndefined(objectkit.getProp(this.data._form.fields, name))) {
+    return this.data._form.fields[name]
   }
 
   return undefined
+}
+
+Model.prototype.getFormFieldValueFromInputName = function getFormFieldValueFromInputName(name) {
+  // possible name values are "example", "example[0].test"
+  const field = this.getFormFieldFromInputName(name)
+  return typekit.isObject(field)
+    ? field.value
+    : typekit.isArray(field)
+      ? field.map(function(obj) {
+        return Object.keys(obj).reduce(function(memo, k) {
+          memo[k] = obj[k].value
+          return memo
+        }, {})
+      })
+      : undefined
 }
 
 Model.prototype.updateFormField = function updateFormField(name, payload, _opts={}) {
@@ -235,7 +269,7 @@ Model.prototype.isInputDefinedInFormSchema = function isInputDefinedInFormSchema
     return true
   }
 
-  if (!typekit.isUndefined(objectkit.getProp(this.data._form.fields[name], 'value'))) {
+  if (!typekit.isUndefined(objectkit.getProp(this.data._form.fields, [name, 'value']))) {
     return true
   }
 

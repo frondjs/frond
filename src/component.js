@@ -60,6 +60,14 @@ Component.prototype.render = function render() {
   })
   this.registerDOMEvents(this.config.on)
   this.initialRenderDone = true
+
+  functionkit.waitForIt(
+    () => Frond.getDocument().body.contains(this.dom()),
+    () => this.emit('render'),
+    100,
+    500
+  )
+
   return this
 }
 
@@ -88,12 +96,24 @@ Component.prototype.getForm = function getForm() {
   return this.model.getForm()
 }
 
+Component.prototype.getFormPayload = function getFormPayload() {
+  return this.model.getFormPayload()
+}
+
 Component.prototype.getInput = function getInput(name) {
   return this.model.getFormFieldValueFromInputName(name)
 }
 
 Component.prototype.updateInput = function updateInput(name, value) {
-  this.model.updateFormFieldValueFromInputName(name, value, {updateDOM: true})
+  return this.model.updateFormFieldValueFromInputName(name, value, {updateDOM: true})
+}
+
+Component.prototype.updateComponentInput = function updateComponentInput(name, value) {
+  return this.model.updateFormFieldValueFromInputName(name, value, {updateDOM: false})
+}
+
+Component.prototype.updateFormField = function updateFormField(name, payload, _opts={}) {
+  return this.model.updateFormField(name, payload, _opts={})
 }
 
 Component.prototype.updateInputDOM = function updateInputDOM(field, value) {
@@ -105,17 +125,18 @@ Component.prototype.updateInputDOM = function updateInputDOM(field, value) {
   // input, textarea, checkbox, radio, select
   if (!field.type) return false
   const {type} = field
+  const resolvedValue = typekit.isFunction(field.formatter) ? field.formatter(value) : value
   if (type == 'input') {
-    element.value = value
+    element.value = resolvedValue
   }
   else if (type == 'textarea') {
-    element.value = value
+    element.value = resolvedValue
   }
   else if (type == 'checkbox') {
-    element.checked = value === true ? true : false
+    element.checked = resolvedValue === true ? true : false
   }
   else if (type == 'radio') {
-    const radioqs = 'input[name="' + field.name + '"][value="' + value + '"]'
+    const radioqs = 'input[name="' + field.name + '"][value="' + resolvedValue + '"]'
     const radioElement = this.dom().querySelector(radioqs)
     if (radioElement) {
       radioElement.checked = true
@@ -127,11 +148,11 @@ Component.prototype.updateInputDOM = function updateInputDOM(field, value) {
       for (let j = 0; j < element.options.length; j++) {
         const opt = element.options[j]
         const v = opt.getAttribute('value')
-        if (opt.selected === true && value.indexOf(v) === -1) {
+        if (opt.selected === true && resolvedValue.indexOf(v) === -1) {
           opt.selected = false
           isChanged = true
         }
-        if (opt.selected === false && value.indexOf(v) !== -1) {
+        if (opt.selected === false && resolvedValue.indexOf(v) !== -1) {
           opt.selected = true
           isChanged = true
         }
@@ -140,8 +161,8 @@ Component.prototype.updateInputDOM = function updateInputDOM(field, value) {
     }
     else {
       const prevValue = element.value
-      element.value = value
-      if (prevValue != value) element.dispatchEvent(new Event('change'))
+      element.value = resolvedValue
+      if (prevValue != resolvedValue) element.dispatchEvent(new Event('change'))
     }
   }
   else {
@@ -326,6 +347,8 @@ Component.prototype.buildDOMNode = function buildDOMNode(tag, obj, context) {
     })
     // set value
     obj.value = self.model.getFormFieldValueFromInputName(obj.name)
+    const field = self.model.getFormFieldFromInputName(obj.name)
+    if (typekit.isFunction(field.formatter)) obj.value = field.formatter(obj.value)
     // track value
     self.updateEventListenerConfig({
       fieldName: obj.name,
@@ -349,6 +372,8 @@ Component.prototype.buildDOMNode = function buildDOMNode(tag, obj, context) {
     })
     // set value
     obj.text = self.model.getFormFieldValueFromInputName(obj.name)
+    const field = self.model.getFormFieldFromInputName(obj.name)
+    if (typekit.isFunction(field.formatter)) obj.text = field.formatter(obj.value)
     // track value
     self.updateEventListenerConfig({
       fieldName: obj.name,
@@ -818,7 +843,14 @@ Component.prototype.registerDOMEvents = function registerDOMEvents(obj) {
           const evlisteners = !typekit.isArray(obj[qs][evname]) ? [obj[qs][evname]] : obj[qs][evname]
 
           if (evname == 'ready') {
-            delete obj[qs][evname]
+            functionkit.waitForIt(
+              () => validationkit.isNotEmpty(Frond.getDocument().querySelector(qs)),
+              () => evlisteners.map(f => f.call(self, match, self)),
+              100,
+              500
+            )
+          }
+          else if (evname == 'render') {
             functionkit.waitForIt(
               () => validationkit.isNotEmpty(Frond.getDocument().querySelector(qs)),
               () => evlisteners.map(f => f.call(self, match, self)),
@@ -833,6 +865,8 @@ Component.prototype.registerDOMEvents = function registerDOMEvents(obj) {
           }
         }
       }
+
+      if (validationkit.isNotEmpty(obj[qs].ready)) delete obj[qs].ready
     }
   }
 
