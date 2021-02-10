@@ -12,6 +12,7 @@ const RequestRepository = require('./domain/request/repository')
 const WrapperDOMElement = require('./domain/wrapperDOMElement/entity')
 const i18n = require('./infrastructure/i18n')
 const config = require('./infrastructure/config')
+const assetManager = require('./infrastructure/assetManager')
 
 function FrondFramework() {
   const _setExternals = require('./application/setExternals')
@@ -129,7 +130,8 @@ function FrondFramework() {
     component: registerComponent,
     middleware: registerMiddleware,
     render: render,
-    goto: goto
+    goto: goto,
+    asset: assetManager
   }
 }
 
