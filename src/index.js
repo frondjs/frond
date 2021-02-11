@@ -5,6 +5,7 @@ const {match} = require('path-to-regexp')
 const nunjucks = require('nunjucks/browser/nunjucks-slim.min.js')
 require('./infrastructure/dom/keyCode')
 const DOMScripterLib = require('dom-scripter')
+const StateManagerObject = require('state-manager-object')
 const ExternalRepository = require('./domain/external/repository')
 const RouteRepository = require('./domain/route/repository')
 const ComponentRepository = require('./domain/component/repository')
@@ -117,6 +118,7 @@ function FrondFramework() {
 
   return {
     config: ctx.config,
+    state: StateManagerObject.create({}),
     request: requestRepository,
     eventEmitter: eventEmitter,
     i18n: i18n,
