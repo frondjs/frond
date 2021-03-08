@@ -71,7 +71,7 @@ Component.prototype.findReferences = function findReferences(parentDOMElement) {
     if (this.refs.hasOwnProperty(name) && multiple) {
       const nameFormatted = name.replace('[]', '')
       if (typekit.isArray(this.refs[nameFormatted])) this.refs[nameFormatted].push(matches[i])
-      else this.refs[nameFormatted] = [this.refs[nameFormatted], matches[i]]
+      else this.refs[nameFormatted] = [matches[i]]
     }
     else {
       this.refs[name] = matches[i]
