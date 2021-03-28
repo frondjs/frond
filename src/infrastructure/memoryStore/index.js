@@ -1,3 +1,5 @@
+const {objectkit} = require('basekits')
+
 function MemoryStore() {
   this.store = {}
 }
