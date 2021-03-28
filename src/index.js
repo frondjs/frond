@@ -108,6 +108,10 @@ function FrondFramework() {
     return _registerRoute(ctx, pathExpression, opts, viewfn)
   }
 
+  function _getInitialRoute() {
+    return routeRepository.getInitialRoute()
+  }
+
   ctx.onNativeLinkClick = function onNativeLinkClick(event, target) {
     event.preventDefault()
     return goto(target)
@@ -135,7 +139,8 @@ function FrondFramework() {
     render: render,
     goto: goto,
     asset: assetManager,
-    memoryStore: memoryStore
+    memoryStore: memoryStore,
+    getInitialRoute: _getInitialRoute
   }
 }
 

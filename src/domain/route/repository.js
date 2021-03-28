@@ -6,6 +6,16 @@ function RouteRepository() {
   this.middlewares = []
 }
 
+RouteRepository.prototype.getInitialRoute = function getInitialRoute() {
+  for (var i = 0; i < this.routes.length; i++) {
+    if (this.routes[i].opts.initial === true) {
+      return this.routes[i]
+    }
+  }
+
+  return undefined
+}
+
 RouteRepository.prototype.insert = function insert(Route) {
   if (Route.isMiddleware()) this.middlewares.push(Route)
   else this.routes.push(Route)
