@@ -14,6 +14,7 @@ const WrapperDOMElement = require('./domain/wrapperDOMElement/entity')
 const i18n = require('./infrastructure/i18n')
 const config = require('./infrastructure/config')
 const assetManager = require('./infrastructure/assetManager')
+const memoryStore = require('./infrastructure/memoryStore')
 
 function FrondFramework() {
   const _setExternals = require('./application/setExternals')
@@ -133,7 +134,8 @@ function FrondFramework() {
     middleware: registerMiddleware,
     render: render,
     goto: goto,
-    asset: assetManager
+    asset: assetManager,
+    memoryStore: memoryStore
   }
 }
 
