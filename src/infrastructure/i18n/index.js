@@ -18,7 +18,6 @@ I18n.prototype.defaultOptions = {
   carryAppLocaleIn: 'ADDRESS_BAR', // or LOCAL_STORAGE
   translationsURI: window.location.protocol + '//' + window.location.hostname
     + (window.location.port ? ':' + window.location.port: '')
-    + '/static'
 }
 
 I18n.prototype.reMatchLocaleInPath = /^(\/[a-zA-Z]{2}(-[a-zA-Z]{2})?)\/?(?![a-zA-Z0-9]+)/g
