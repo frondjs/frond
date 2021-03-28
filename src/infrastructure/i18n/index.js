@@ -105,7 +105,7 @@ I18n.prototype.loadTranslation = function loadTranslation() {
     return Promise.resolve(null)
   }
 
-  return fetch(self.opts.translationsURI + '/' + path).then(function(resp) {
+  return fetch(this.opts.translationsURI + '/' + path).then(function(resp) {
     return resp.json()
   })
 }

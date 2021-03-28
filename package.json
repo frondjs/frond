@@ -1,6 +1,6 @@
 {
   "name": "@frondjs/frond",
-  "version": "5.0.5",
+  "version": "5.0.6",
   "description": "Scalable, toolless and powerful javascript frontend framework.",
   "main": "src/index.js",
   "scripts": {
