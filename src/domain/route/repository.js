@@ -6,9 +6,9 @@ function RouteRepository() {
   this.middlewares = []
 }
 
-RouteRepository.prototype.getInitialRoute = function getInitialRoute() {
+RouteRepository.prototype.getRouteByTag = function getRouteByTag(tag) {
   for (var i = 0; i < this.routes.length; i++) {
-    if (this.routes[i].opts.initial === true) {
+    if (this.routes[i].opts.tag == tag) {
       return this.routes[i]
     }
   }

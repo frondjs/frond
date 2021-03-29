@@ -108,8 +108,8 @@ function FrondFramework() {
     return _registerRoute(ctx, pathExpression, opts, viewfn)
   }
 
-  function _getInitialRoute() {
-    return routeRepository.getInitialRoute()
+  function _getRouteByTag() {
+    return routeRepository.getRouteByTag()
   }
 
   ctx.onNativeLinkClick = function onNativeLinkClick(event, target) {
@@ -140,7 +140,7 @@ function FrondFramework() {
     goto: goto,
     asset: assetManager,
     memoryStore: memoryStore,
-    getInitialRoute: _getInitialRoute
+    getRouteByTag: _getRouteByTag
   }
 }
 
