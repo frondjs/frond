@@ -25,7 +25,7 @@ Component.prototype.initState = function initState() {
   }
   else if (typekit.isFunction(this.state)) {
     this.hasState = true
-    this.state = this.state.apply(this)
+    this.state = StateManagerObject.create(this.state.apply(this))
   }
   else {
     this.hasState = false
