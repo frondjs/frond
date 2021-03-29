@@ -23,6 +23,10 @@ Component.prototype.initState = function initState() {
     this.hasState = true
     this.state = StateManagerObject.create(this.state)
   }
+  else if (typekit.isFunction(this.state)) {
+    this.hasState = true
+    this.state = this.state.apply(this)
+  }
   else {
     this.hasState = false
     this.state = undefined
