@@ -1,4 +1,5 @@
 const WrapperDOMElement = require('../domain/wrapperDOMElement/entity')
+const assetManager = require('../infrastructure/assetManager')
 
 module.exports = function renderComponent(
   ctx, componentname, wrapperDOMElement, actualRoute=[]) {
@@ -14,7 +15,10 @@ module.exports = function renderComponent(
     throw e
   }
 
-  const literals = Object.assign({}, {frond: ctx.config}, component.getState())
+  const literals = Object.assign({}, {
+    frond: ctx.config.asObject(),
+    assets: assetManager.asObject()
+  }, component.getState())
   const htmlstr = ctx.nunjucks.render(component.template.name, literals)
 
   wrapperDOMElement.patch(htmlstr)

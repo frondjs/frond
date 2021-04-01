@@ -22,4 +22,8 @@ Config.prototype.getInternal = function getInternal(k) {
   return this.get(this.internalsPrefix + k)
 }
 
+Config.prototype.asObject = function asObject() {
+  return this.state.getState()
+}
+
 module.exports = new Config()

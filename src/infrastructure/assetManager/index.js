@@ -9,4 +9,8 @@ AssetManager.prototype.get = function get(path) {
   return this.assets[path]
 }
 
+AssetManager.prototype.asObject = function asObject() {
+  return this.assets
+}
+
 module.exports = new AssetManager()
