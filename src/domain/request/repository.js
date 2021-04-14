@@ -11,11 +11,19 @@ RequestRepository.prototype.set = function set(payload) {
   this.path = newPath
   this.params = objectkit.getProp(payload, 'params')
   this.component = objectkit.getProp(payload, 'component')
+  this.route = payload.route
 
   if (isPathChanged) {
     window.history.pushState(null, null, this.path)
 
     eventEmitter.emit('SCREEN', [{path: this.path}])
+  }
+}
+
+RequestRepository.prototype.get = function get() {
+  return {
+    path: this.path,
+    params: this.params
   }
 }
 

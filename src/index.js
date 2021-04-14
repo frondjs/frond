@@ -112,6 +112,10 @@ function FrondFramework() {
     return routeRepository.getRouteByTag()
   }
 
+  function _getCurrentRoute() {
+    return requestRepository.get()
+  }
+
   ctx.onNativeLinkClick = function onNativeLinkClick(event, target) {
     event.preventDefault()
     return goto(target)
@@ -140,7 +144,8 @@ function FrondFramework() {
     goto: goto,
     asset: assetManager,
     memoryStore: memoryStore,
-    getRouteByTag: _getRouteByTag
+    getRouteByTag: _getRouteByTag,
+    getCurrentRoute: _getCurrentRoute
   }
 }
 
