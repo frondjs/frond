@@ -1,6 +1,6 @@
 const renderComponent = require('./renderComponent')
 
-module.exports = function goto(ctx, path) {
+module.exports = function goto(ctx, path, opts={}) {
   const prefix = ctx.config.getInternal('ROUTES_PREFIX') || ''
   // add ROUTES_PREFIX if it doesn't exist in the path
   if (prefix && path.indexOf(prefix) !== 0) {
@@ -46,6 +46,6 @@ module.exports = function goto(ctx, path) {
     route: actualRoute[0]
   })
 
-  renderComponent(ctx, actualRoute[0].componentname, ctx.rootWrapperDOMElement)
+  renderComponent(ctx, actualRoute[0].componentname, ctx.rootWrapperDOMElement, [], opts)
   return;
 }

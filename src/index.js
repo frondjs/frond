@@ -50,7 +50,13 @@ function FrondFramework() {
       settings.ROUTES_PREFIX = '/' + i18n.getAppLocale(true)
     }
 
-    const validSettings = ['ROUTES_PREFIX']
+    settings.rehydrate = settings.hasOwnProperty('rehydrate')
+      ? settings.rehydrate
+      : 'rehydrate' in domelement.dataset
+        ? (domelement.dataset.rehydrate == 1 ? true : false)
+        : domelement.innerHTML.length > 0 && window.navigator.userAgent != 'FrondJS'
+
+    const validSettings = ['ROUTES_PREFIX', 'rehydrate']
     if (settings.ROUTES_PREFIX) {
       settings.ROUTES_PREFIX = ('/' + settings.ROUTES_PREFIX).replace(/\/\//, '/')
     }
@@ -82,7 +88,7 @@ function FrondFramework() {
 
   function render(config={}) {
     // assumin path has given
-    return _goto(ctx, config.path)
+    return _goto(ctx, config.path, {initialRender: true})
   }
 
   function goto(path) {

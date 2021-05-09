@@ -2,7 +2,7 @@ const WrapperDOMElement = require('../domain/wrapperDOMElement/entity')
 const assetManager = require('../infrastructure/assetManager')
 
 module.exports = function renderComponent(
-  ctx, componentname, wrapperDOMElement, actualRoute=[]) {
+  ctx, componentname, wrapperDOMElement, actualRoute=[], opts={}) {
 
   // find component
   let component = null
@@ -15,15 +15,24 @@ module.exports = function renderComponent(
     throw e
   }
 
-  const literals = Object.assign({}, {
-    frond: ctx.config.asObject(),
-    assets: assetManager.asObject()
-  }, component.getState())
-  const htmlstr = ctx.nunjucks.render(component.template.name, literals)
-
-  wrapperDOMElement.patch(htmlstr)
+  const rehydrate = ctx.config.getInternal('rehydrate')
+  if (!rehydrate) {
+    const literals = Object.assign({}, {
+      frond: ctx.config.asObject(),
+      assets: assetManager.asObject()
+    }, component.getState())
+    const htmlstr = ctx.nunjucks.render(component.template.name, literals)
+    wrapperDOMElement.patch(htmlstr)
+  }
+  else {
+    if (opts.initialRender) {
+      ctx.config.setInternal('rehydrate', false) // so it will patch next time
+    }
+  }
 
   // find references
+  component.restoreInputValues(wrapperDOMElement.element)
+  component.rememberInputs(wrapperDOMElement.element)
   component.findReferences(wrapperDOMElement.element)
   component.findNativeLinks(wrapperDOMElement.element, ctx.routeRepository,
     ctx.onNativeLinkClick, (ctx.config.getInternal('ROUTES_PREFIX') || ''))
@@ -46,7 +55,7 @@ module.exports = function renderComponent(
     renderComponent(ctx, actualRoute[0].componentname, wrapperDOMElement)
   })
 
-  component.emit('update')
+  component.emit('update', [component.getPrevState(), component.getState()])
   component.emit('ready')
   component.emit('render')
 }

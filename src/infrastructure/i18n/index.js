@@ -16,7 +16,7 @@ function I18n() {
 I18n.prototype.defaultOptions = {
   localStorageKeyName: 'frond_locale',
   carryAppLocaleIn: 'ADDRESS_BAR', // or LOCAL_STORAGE
-  translationsURI: window.location.protocol + '//' + window.location.hostname
+  host: window.location.protocol + '//' + window.location.hostname
     + (window.location.port ? ':' + window.location.port: '')
 }
 
@@ -74,6 +74,53 @@ Did you forget to translate the files inside translations folder?'))
   })
 }
 
+I18n.prototype.changeAppLocale = function changeAppLocale(newLocale, opts={reload: true}) {
+  const self = this
+
+  return new Promise(function(resolve, reject) {
+    const {supportedLocales} = window.frondjs
+    const newLocaleFormatted = self.formatLocale(newLocale)
+
+    if (supportedLocales.indexOf(newLocaleFormatted) === -1) {
+      throw new Error('Unsupported locale.')
+    }
+
+    if (self.appLocale == newLocaleFormatted) {
+      return resolve()
+    }
+
+    if (self.opts.carryAppLocaleIn == 'ADDRESS_BAR') {
+      window.location.href = self.opts.host + '/' +
+        (self.opts.defaultLocale == newLocaleFormatted
+          ? ''
+          : self.slugifyLocale(newLocaleFormatted))
+    }
+    else if (self.opts.carryAppLocaleIn == 'LOCAL_STORAGE') {
+      localStorage.setItem(self.opts.localStorageKeyName, newLocaleFormatted)
+
+      if (opts.reload === true) window.location.reload()
+      else {
+        self.appLocale = newLocaleFormatted
+
+        self.loadTranslation().then(function(json) {
+          if (!typekit.isObject(json)) return resolve()
+
+          self.gettext = new Gettext({'domain': 'messages', 'locale_data': {messages: json}})
+
+          window._ = function(arg) {
+            return self.gettext.gettext(arg)
+          }
+
+          return resolve()
+        })
+      }
+    }
+    else {
+      throw new Error('The carryAppLocaleIn option seems invalid.')
+    }
+  })
+}
+
 I18n.prototype.detectAppLocale = function detectAppLocale(supportedLocales) {
   let possibleLocale = null
 
@@ -85,13 +132,19 @@ I18n.prototype.detectAppLocale = function detectAppLocale(supportedLocales) {
     possibleLocale = path.match(this.reMatchLocaleInPath)[0].replace(/\/+/g, '')
   }
   else if (this.opts.carryAppLocaleIn == 'LOCAL_STORAGE') {
-    possibleLocale = localStorage.getItem(this.localStorageKeyName)
+    possibleLocale = localStorage.getItem(this.opts.localStorageKeyName)
   }
   else {
     throw new Error('The carryAppLocaleIn option seems invalid.')
   }
 
-  return supportedLocales.indexOf(this.formatLocale(possibleLocale)) !== -1
+  if (!possibleLocale) {
+    return this.opts.defaultLocale
+  }
+
+  possibleLocale = this.formatLocale(possibleLocale)
+
+  return supportedLocales.indexOf(possibleLocale) !== -1
     ? possibleLocale
     : this.opts.defaultLocale
 }
@@ -104,7 +157,7 @@ I18n.prototype.loadTranslation = function loadTranslation() {
     return Promise.resolve(null)
   }
 
-  return fetch(this.opts.translationsURI + '/' + path).then(function(resp) {
+  return fetch(this.opts.host + '/' + path).then(function(resp) {
     return resp.json()
   })
 }
@@ -114,7 +167,8 @@ I18n.prototype.slugifyLocale = function slugifyLocale(locale) {
 }
 
 I18n.prototype.formatLocale = function formatLocale(locale) {
-  return locale.split('-')[0] + '_' + locale.split('-')[1].toUpperCase()
+  const parts = locale.split(/[_-]/)
+  return parts[0] + '_' + parts[1].toUpperCase()
 }
 
 module.exports = new I18n()

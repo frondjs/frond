@@ -1,8 +1,8 @@
 {
   "name": "@frondjs/frond",
-  "version": "5.0.15",
+  "version": "5.0.16",
   "description": "Scalable, toolless and powerful javascript frontend framework.",
-  "main": "src/index.js",
+  "main": "dist/frond.cjs.js",
   "scripts": {
     "test": "NODE_ENV=test jasmine --config=spec/config/jasmine.json",
     "build": "USE_POLYFILLS=off rollup --config rollup.config.js && USE_POLYFILLS=on rollup --config rollup.config.js",
@@ -38,31 +38,31 @@
   "homepage": "https://github.com/frondjs/frond#readme",
   "dependencies": {
     "animated-scroll-to": "^2.2.0",
-    "basekits": "^1.2.4",
+    "basekits": "^1.2.5",
     "dom-scripter": "^3.0.0",
     "event-emitter-object": "^4.0.2",
     "install": "^0.13.0",
     "metapatcher": "^2.0.7",
-    "npm": "^7.8.0",
     "nunjucks": "^3.2.3",
     "path-to-regexp": "^6.2.0",
     "state-manager-object": "^2.0.1"
   },
   "devDependencies": {
-    "@babel/cli": "^7.13.0",
-    "@babel/core": "^7.13.8",
-    "@babel/preset-env": "^7.13.9",
+    "@babel/cli": "^7.13.16",
+    "@babel/core": "^7.14.0",
+    "@babel/preset-env": "^7.14.1",
     "@rollup/plugin-commonjs": "^17.1.0",
     "@rollup/plugin-json": "^4.1.0",
-    "@rollup/plugin-node-resolve": "^11.2.0",
-    "core-js": "^3.9.1",
-    "jasmine": "^3.6.4",
-    "jsdom": "^16.5.0",
+    "@rollup/plugin-node-resolve": "^11.2.1",
+    "colors": "^1.4.0",
+    "core-js": "^3.12.1",
+    "jasmine": "^3.7.0",
+    "jsdom": "^16.5.3",
     "parse5": "^6.0.1",
-    "rollup": "^2.40.0",
+    "rollup": "^2.47.0",
     "rollup-plugin-babel": "^4.4.0",
     "rollup-plugin-terser": "^7.0.2",
-    "semver": "^7.3.4",
+    "semver": "^7.3.5",
     "yargs": "^16.2.0"
   }
 }

@@ -1,11 +1,12 @@
-const {typekit} = require('basekits')
+const {typekit, objectkit} = require('basekits')
 const StateManagerObject = require('state-manager-object')
 const EventEmitterObject = require('event-emitter-object')
 
 function Component(name, template, state=undefined, on=undefined, services=undefined) {
   this.name = name
+  this.prevState = null
   this.state = state
-  this.on = on
+  this.initialEvents = on
   this.services = services
   this.template = template
   this.eventEmitter = EventEmitterObject.create()
@@ -37,7 +38,12 @@ Component.prototype.getState = function getState() {
   return this.state ? this.state.getState() : {}
 }
 
+Component.prototype.getPrevState = function getPrevState() {
+  return this.prevState
+}
+
 Component.prototype.updateState = function updateState(payload) {
+  this.prevState = this.getState()
   this.state.updateState(payload)
 }
 
@@ -46,25 +52,74 @@ Component.prototype.hasState = function hasState() {
 }
 
 Component.prototype.registerEvents = function registerEvents() {
-  if (typekit.isObject(this.on)) {
+  if (typekit.isObject(this.initialEvents)) {
     this.hasEvents = true
-    Object.keys(this.on).map(k => this.eventEmitter.on(k, this.on[k]))
+    Object.keys(this.initialEvents).map(k => this.eventEmitter.on(k, this.initialEvents[k]))
   }
   else {
     this.hasEvents = false
   }
 }
 
-Component.prototype.emit = function emit(name) {
+Component.prototype.on = function on(eventName, fn) {
+  this.eventEmitter.on(eventName, fn)
+}
+
+Component.prototype.emit = function emit(name, args=[]) {
   if (name == 'update' && this.ready === false) return;
   if (name == 'ready' && this.ready === true) return;
-  if (name == 'ready') this.ready = true;
+  if (name == 'ready') this.ready = true
 
-  return this.eventEmitter.emit.apply(this, [name])
+  return this.eventEmitter.emit.apply(this, [name, args])
 }
 
 Component.prototype.next = function next() {
   this.eventEmitter.emit('_next')
+}
+
+Component.prototype.restoreInputValues = function restoreInputValues(parentDOMElement) {
+  const state = window.history.state
+
+  if (state) {
+    Object.keys(state).map(function(name) {
+      const selector = `input[name="${name}"], select[name="${name}"], textarea[name="${name}"]`
+      const node = parentDOMElement.querySelector(selector)
+      if (node) {
+        node.value = state[name]
+      }
+    })
+  }
+}
+
+Component.prototype.rememberInputs = function rememberInputs(parentDOMElement) {
+  const inputs = parentDOMElement.querySelectorAll('input,select,textarea')
+
+  if (!inputs) return;
+
+  const typesNotToBeTracked = [
+    'file', 'button', 'checkbox', 'hidden', 'image', 'password', 'radio', 'reset',
+    'submit'
+  ]
+
+  for (var i = 0; i < inputs.length; i++) {
+    const input = inputs[i]
+    const tagname = input.tagName.toLowerCase()
+
+    if (!input.getAttribute('name')) continue;
+
+    if (input.dataset.frondUncontrolled == 1) continue;
+
+    const type = input.getAttribute('type')
+    if (tagname == 'input' && typesNotToBeTracked.indexOf(type) !== -1) continue;
+
+    const name = input.getAttribute('name')
+    input.addEventListener('change', function(e) {
+      const state = Object.assign({}, window.history.state || {}, {
+        [name]: e.target.value
+      })
+      window.history.replaceState(state, null)
+    })
+  }
 }
 
 Component.prototype.findReferences = function findReferences(parentDOMElement) {
