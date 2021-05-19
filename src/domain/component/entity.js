@@ -168,10 +168,10 @@ Component.prototype.findNativeLinks = function findNativeLinks(parentDOMElement,
 }
 
 Component.prototype.registerServices = function registerServices(parentDOMElement) {
-  const elements = parentDOMElement.querySelectorAll('[data-frond-services]')
+  const elements = parentDOMElement.querySelectorAll('[data-frond-service]')
   for (let i = 0; i < elements.length; i++) {
     const element = elements[i]
-    const description = element.dataset.frondServices.trim()
+    const description = element.dataset.frondService.trim()
     const items = description.split(' ')
     for (let j = 0; j < items.length; j++) {
       const [name, service] = items[j].split(':')
