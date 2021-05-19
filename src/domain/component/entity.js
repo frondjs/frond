@@ -2,7 +2,9 @@ const {typekit, objectkit} = require('basekits')
 const StateManagerObject = require('state-manager-object')
 const EventEmitterObject = require('event-emitter-object')
 
-function Component(name, template, state=undefined, on=undefined, services=undefined) {
+function Component(
+  name, template, state=undefined, on=undefined, services=undefined, rehydrate=true
+) {
   this.name = name
   this.prevState = null
   this.state = state
@@ -12,21 +14,26 @@ function Component(name, template, state=undefined, on=undefined, services=undef
   this.eventEmitter = EventEmitterObject.create()
   this.ready = false
   this.refs = {}
+  this.rehydrate = rehydrate
 
   this.initState()
   this.registerEvents()
 }
+
 
 Component.prototype.origin = window.location.origin
 
 Component.prototype.initState = function initState() {
   if (typekit.isObject(this.state)) {
     this.hasState = true
+    if (this.rehydrate === false) this.state._rehydrate_toggle = true
     this.state = StateManagerObject.create(this.state)
   }
   else if (typekit.isFunction(this.state)) {
     this.hasState = true
-    this.state = StateManagerObject.create(this.state.apply(this))
+    const result = this.state.apply(this)
+    if (this.rehydrate === false) result._rehydrate_toggle = true
+    this.state = StateManagerObject.create(result)
   }
   else {
     this.hasState = false

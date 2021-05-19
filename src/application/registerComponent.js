@@ -18,9 +18,19 @@ module.exports = function registerComponent(ctx, viewfn) {
     const numName = obj.name + i
     const component = new Component(
       numName, obj.template, obj.state || undefined,
-      obj.on || undefined, obj.services || undefined)
+      obj.on || undefined, obj.services || undefined,
+      obj.hasOwnProperty('rehydrate') ? obj.rehydrate : true
+    )
 
     if (component.hasState) {
+      if (component.rehydrate === false) {
+        component.on('ready', function() {
+          if (ctx.config.getInternal('rehydrate') === false) {
+            component.updateState({_rehydrate_toggle: !component.getState()._rehydrate_toggle})
+          }
+        })
+      }
+
       component.state.subscribe(function(currentState, prevState) {
         const wrapperElement = ctx.rootWrapperDOMElement.findChildByName(component.name)
         const componentWrapper = wrapperElement
