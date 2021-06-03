@@ -1,4 +1,4 @@
-const {typekit, objectkit} = require('basekits')
+const {typekit, objectkit, functionkit} = require('basekits')
 const StateManagerObject = require('state-manager-object')
 const EventEmitterObject = require('event-emitter-object')
 
@@ -25,18 +25,18 @@ Component.prototype.origin = window.location.origin
 
 Component.prototype.initState = function initState() {
   if (typekit.isObject(this.state)) {
-    this.hasState = true
+    this._hasState = true
     if (this.rehydrate === false) this.state._rehydrate_toggle = true
     this.state = StateManagerObject.create(this.state)
   }
   else if (typekit.isFunction(this.state)) {
-    this.hasState = true
+    this._hasState = true
     const result = this.state.apply(this)
     if (this.rehydrate === false) result._rehydrate_toggle = true
     this.state = StateManagerObject.create(result)
   }
   else {
-    this.hasState = false
+    this._hasState = false
     this.state = undefined
   }
 }
@@ -55,7 +55,7 @@ Component.prototype.updateState = function updateState(payload) {
 }
 
 Component.prototype.hasState = function hasState() {
-  return this.state ? true : false
+  return this._hasState
 }
 
 Component.prototype.registerEvents = function registerEvents() {
@@ -191,6 +191,39 @@ Component.prototype.registerService = function registerService(element, name, se
           return self.services[service].apply(self, [event])
         }
       })
+    break;
+    case 'keydown':
+      element.addEventListener('keydown', function(event) {
+        const ename = window.KeyCode.hot_key(window.KeyCode.translate_event(event))
+        return self.services[service].apply(self, [event, ename])
+      })
+    break;
+    case 'keyup':
+      element.addEventListener('keyup', function(event) {
+        const ename = window.KeyCode.hot_key(window.KeyCode.translate_event(event))
+        return self.services[service].apply(self, [event, ename])
+      })
+    break;
+    case 'hover':
+      element.addEventListener('mouseover', functionkit.debounce(function(event) {
+        return self.services[service].apply(self, [event, true])
+      }, 200, {trailing: true}))
+      element.addEventListener('mouseleave', functionkit.debounce(function(event) {
+        return self.services[service].apply(self, [event, false])
+      }, 200, {trailing: true}))
+    break;
+    case 'change':
+      if (element.tagName == 'INPUT' || element.tagName == 'TEXTAREA') {
+        element.addEventListener('input', functionkit.debounce(function(event) {
+          return self.services[service].apply(self, [event])
+        }, 200, {trailing: true}))
+      }
+
+      if (element.tagName == 'SELECT') {
+        element.addEventListener('change', function(event) {
+          return self.services[service].apply(self, [event])
+        })
+      }
     break;
     default:
       element.addEventListener(name, function(event) {
