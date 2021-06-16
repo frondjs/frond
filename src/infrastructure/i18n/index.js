@@ -20,7 +20,7 @@ I18n.prototype.defaultOptions = {
     + (window.location.port ? ':' + window.location.port: '')
 }
 
-I18n.prototype.reMatchLocaleInPath = /^(\/[a-zA-Z]{2}(-[a-zA-Z]{2})?)\/?(?![a-zA-Z0-9]+)/g
+I18n.prototype.reMatchLocaleInPath = /^(\/[a-zA-Z]{2}(-[a-zA-Z]{2})?)\/?(?![a-zA-Z0-9]+)/
 
 I18n.prototype.isMultilingual = function isMultilingual() {
   return this.multilingual === true
@@ -54,7 +54,7 @@ Did you forget to translate the files inside translations folder?'))
       return reject(new Error('You should set defaultLocale.'))
     }
 
-    if (supportedLocales.length > 0 || supportedLocales[0] != self.opts.defaultLocale) {
+    if (supportedLocales && supportedLocales.length > 1) {
       self.multilingual = true
     }
 
