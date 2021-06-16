@@ -46,7 +46,11 @@ function FrondFramework() {
     })
     ctx.nunjucks = env
 
-    if (i18n.isNotDefaultLocale() && i18n.isLocaleCarriedOnAddressBar()) {
+    settings.autoAddLocalePrefixToRoutes = settings.hasOwnProperty('autoAddLocalePrefixToRoutes') 
+      ? settings.autoAddLocalePrefixToRoutes
+      : true
+
+    if (i18n.isNotDefaultLocale() && i18n.isLocaleCarriedOnAddressBar() && settings.autoAddLocalePrefixToRoutes) {
       settings.ROUTES_PREFIX = '/' + i18n.getAppLocale(true)
     }
 
