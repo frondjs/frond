@@ -54,7 +54,7 @@ function FrondFramework() {
       ? settings.rehydrate
       : 'rehydrate' in domelement.dataset
         ? (domelement.dataset.rehydrate == 1 ? true : false)
-        : domelement.innerHTML.length > 0 && window.navigator.userAgent != 'FrondJS'
+        : domelement.innerHTML.length > 0
 
     const validSettings = ['ROUTES_PREFIX', 'rehydrate']
     if (settings.ROUTES_PREFIX) {
