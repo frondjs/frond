@@ -1,6 +1,6 @@
 {
   "name": "@frondjs/frond",
-  "version": "5.0.23",
+  "version": "5.0.24",
   "description": "Scalable, toolless and powerful javascript frontend framework.",
   "main": "dist/frond.cjs.js",
   "scripts": {
@@ -38,9 +38,9 @@
   "homepage": "https://github.com/frondjs/frond#readme",
   "dependencies": {
     "animated-scroll-to": "^2.2.0",
-    "basekits": "^1.2.5",
+    "basekits": "^1.3.0",
     "dom-scripter": "^3.0.0",
-    "event-emitter-object": "^4.0.2",
+    "event-emitter-object": "^4.0.4",
     "install": "^0.13.0",
     "metapatcher": "^2.0.7",
     "nunjucks": "^3.2.3",

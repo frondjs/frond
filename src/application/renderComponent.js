@@ -24,20 +24,8 @@ module.exports = function renderComponent(
       params: objectkit.getProp(opts, 'params', {})
     }, component.getState())
 
-    if (component.hasState() && validationkit.isNotEmpty(opts.params)) {
-      const state = component.getState()
-      const payload = Object.keys(state).reduce(function(memo, p) {
-        if (opts.params.hasOwnProperty(p)) {
-          memo[p] = opts.params[p]
-        }
-        return memo
-      }, {})
-      if (validationkit.isNotEmpty(payload)) {
-        component.updateState(payload)
-      }
-    }
-
     const htmlstr = ctx.nunjucks.render(component.template.name, literals)
+
     wrapperDOMElement.patch(htmlstr)
   }
   else {
@@ -58,15 +46,7 @@ module.exports = function renderComponent(
   const elements = wrapperDOMElement.findChildren()
   for (let i = 0; i < elements.length; i++) {
     const childComponentName = elements[i].dataset.frondComponent
-    const params = Object.keys(elements[i].dataset).reduce(function(memo, attr) {
-      const a = attr.slice(5) // removed "frond"
-      if (a.length > 5 && a.indexOf('Param') !== -1) {
-        const param = a.slice(5)
-        memo[param.slice(0, 1).toLowerCase() + param.slice(1)] = elements[i].dataset[attr]
-      }
-      return memo
-    }, {})
-    renderComponent(ctx, childComponentName, new WrapperDOMElement(elements[i]), [], {params: params})
+    renderComponent(ctx, childComponentName, new WrapperDOMElement(elements[i]), [], {})
   }
 
   if (actualRoute.length > 0) component.eventEmitter.once('_next', function() {

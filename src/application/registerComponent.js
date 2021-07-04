@@ -13,13 +13,18 @@ module.exports = function registerComponent(ctx, viewfn) {
     throw new Error('Component should have a name.')
   }
 
+  if (obj.template.childComponentParams) {
+    ctx.componentRepository.updateDefaultParams(obj.template.childComponentParams)
+  }
+
   const instances = obj.instances || 1;
   for (var i = 0; i < instances; i++) {
     const numName = obj.name + i
     const component = new Component(
       numName, obj.template, obj.state || undefined,
       obj.on || undefined, obj.services || undefined,
-      obj.hasOwnProperty('rehydrate') ? obj.rehydrate : true
+      obj.hasOwnProperty('rehydrate') ? obj.rehydrate : true,
+      ctx.componentRepository.getDefaultParams(numName)
     )
 
     if (component.hasState) {

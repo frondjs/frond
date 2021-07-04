@@ -2,6 +2,7 @@ const {ComponentNotFound} = require('./error')
 
 function ComponentRepository() {
   this.components = []
+  this.defaultParamsStore = {}
 }
 
 ComponentRepository.prototype.insert = function insert(Component) {
@@ -20,6 +21,14 @@ ComponentRepository.prototype.getComponentByName = function getComponentByName(n
   }
 
   return matches[0]
+}
+
+ComponentRepository.prototype.updateDefaultParams = function updateDefaultParams(payload) {
+  this.defaultParamsStore = Object.assign({}, this.defaultParamsStore, payload)
+}
+
+ComponentRepository.prototype.getDefaultParams = function getDefaultParams(insname) {
+  return this.defaultParamsStore[insname]
 }
 
 module.exports = ComponentRepository
