@@ -4,7 +4,7 @@ const EventEmitterObject = require('event-emitter-object')
 
 function Component(
   name, template, state=undefined, on=undefined, services=undefined, rehydrate=true,
-  stateDefaults=undefined
+  stateDefaults=undefined, isBindedToRoot=false
 ) {
   this.name = name
   this.prevState = null
@@ -16,6 +16,7 @@ function Component(
   this.ready = false
   this.refs = {}
   this.rehydrate = rehydrate
+  this.isBindedToRoot = isBindedToRoot
 
   this.initState(stateDefaults)
   this.registerEvents()

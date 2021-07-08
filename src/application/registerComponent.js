@@ -2,7 +2,7 @@ const Component = require('../domain/component/entity')
 const WrapperDOMElement = require('../domain/wrapperDOMElement/entity')
 const renderComponent = require('./renderComponent')
 
-module.exports = function registerComponent(ctx, viewfn) {
+module.exports = function registerComponent(ctx, viewfn, opts={}) {
   if (typeof viewfn == 'string') {
     return ctx.componentRepository.getComponentByName(viewfn)
   }
@@ -24,7 +24,8 @@ module.exports = function registerComponent(ctx, viewfn) {
       numName, obj.template, obj.state || undefined,
       obj.on || undefined, obj.services || undefined,
       obj.hasOwnProperty('rehydrate') ? obj.rehydrate : true,
-      ctx.componentRepository.getDefaultParams(numName)
+      ctx.componentRepository.getDefaultParams(numName),
+      opts.hasOwnProperty('route') ? opts.route : false
     )
 
     if (component.hasState) {

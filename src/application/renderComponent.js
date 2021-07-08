@@ -18,15 +18,21 @@ module.exports = function renderComponent(
 
   const rehydrate = ctx.config.getInternal('rehydrate')
   if (!rehydrate) {
-    const literals = Object.assign({}, {
-      frond: ctx.config.asObject(),
-      assets: assetManager.asObject(),
-      params: objectkit.getProp(opts, 'params', {})
-    }, component.getState())
+    const componentCurrentlyNotAvailable = component.isBindedToRoot === false && wrapperDOMElement === ctx.rootWrapperDOMElement
+    if (componentCurrentlyNotAvailable) {
+      // don't render
+    }
+    else {
+      const literals = Object.assign({}, {
+        frond: ctx.config.asObject(),
+        assets: assetManager.asObject(),
+        params: objectkit.getProp(opts, 'params', {})
+      }, component.getState())
 
-    const htmlstr = ctx.nunjucks.render(component.template.name, literals)
+      const htmlstr = ctx.nunjucks.render(component.template.name, literals)
 
-    wrapperDOMElement.patch(htmlstr)
+      wrapperDOMElement.patch(htmlstr)
+    }
   }
   else {
     if (opts.initialRender) {
